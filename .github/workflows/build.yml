@@ -1,9 +1,30 @@
 name: Build Pulsar
 
+# Every push to main builds Pulsar on macOS 26 and, once the signing secrets are set, publishes it as a
+# GitHub Release with an appcast. The installed app checks that appcast every few minutes and updates itself.
+#
+# Secrets (Settings > Secrets and variables > Actions):
+#   SIGNING_CERT_P12       base64 of the self-signed code-signing certificate (.p12)
+#   SIGNING_CERT_PASSWORD  its password
+#   SPARKLE_ED_PRIVATE_KEY the EdDSA private key that signs each update
+# Without them the workflow still builds, ad-hoc signed, as a downloadable artifact only.
+
 on:
   workflow_dispatch:
   push:
     branches: [main]
+
+permissions:
+  contents: write   # to publish releases
+
+concurrency:
+  group: build
+  cancel-in-progress: false
+
+env:
+  # Public half of SPARKLE_ED_PRIVATE_KEY; the app uses it to check every update before installing it.
+  ED_PUBLIC_KEY: 0tRPIY1Kr9r47GJ8+jE2ust3sQQrcSTXWQe2No2mRY8=
+  FEED_URL: https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml
 
 jobs:
   build:
@@ -17,8 +38,42 @@ jobs:
           sw_vers
           xcrun swiftc --version
 
+      - name: Signing
+        id: sign
+        env:
+          P12: ${{ secrets.SIGNING_CERT_P12 }}
+          P12_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
+          ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          if [ -z "$P12" ] || [ -z "$ED_PRIVATE_KEY" ]; then
+            echo "::warning::Signing secrets not set: ad-hoc build, no automatic updates."
+            exit 0
+          fi
+          KC="$RUNNER_TEMP/pulsar.keychain-db"; KP=$(uuidgen)
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KP" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KP" "$KC"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KP" "$KC" > /dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          security find-identity -p codesigning "$KC"
+          HASH=$(security find-certificate -c "Pulsar Self-Signed" -Z "$KC" | awk '/SHA-1/ {print $NF}')
+          printf '%s' "$ED_PRIVATE_KEY" > "$RUNNER_TEMP/ed_key"
+          echo "identity=$HASH" >> "$GITHUB_OUTPUT"
+          echo "release=true" >> "$GITHUB_OUTPUT"
+
       - name: Build
-        run: ./build.sh
+        env:
+          PULSAR_BUILD_NUMBER: ${{ github.run_number }}
+          PULSAR_SIGN_IDENTITY: ${{ steps.sign.outputs.identity }}
+          PULSAR_FEED_URL: ${{ steps.sign.outputs.release && env.FEED_URL || '' }}
+          PULSAR_ED_PUBLIC_KEY: ${{ steps.sign.outputs.release && env.ED_PUBLIC_KEY || '' }}
+        run: |
+          ./build.sh
+          codesign --verify --deep --strict build/Pulsar.app
+          codesign -d -r- build/Pulsar.app
 
       - name: Package
         # ditto keeps the symlinks inside Sparkle.framework, so the code signature stays valid
@@ -29,3 +84,41 @@ jobs:
           name: Pulsar
           path: build/Pulsar.zip
           retention-days: 30
+
+      - name: Publish update
+        if: steps.sign.outputs.release == 'true' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          N: ${{ github.run_number }}
+        run: |
+          SIG=$(Vendor/Sparkle/bin/sign_update --ed-key-file "$RUNNER_TEMP/ed_key" build/Pulsar.zip)
+          rm "$RUNNER_TEMP/ed_key"
+          echo "$SIG"
+          TAG="build-$N"
+          URL="https://github.com/${{ github.repository }}/releases/download/$TAG/Pulsar.zip"
+          git log -1 --format=%B | grep -v -e '^Co-Authored-By:' -e '^Claude-Session:' > build/notes.txt
+          SIG="$SIG" URL="$URL" python3 - <<'EOF'
+          import os, html, email.utils
+          n, sig, url = os.environ["N"], os.environ["SIG"], os.environ["URL"]
+          notes = html.escape(open("build/notes.txt").read().strip())
+          short = __import__("plistlib").load(open("build/Pulsar.app/Contents/Info.plist", "rb"))["CFBundleShortVersionString"]
+          open("build/appcast.xml", "w").write(f"""<?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <channel>
+              <title>Pulsar</title>
+              <item>
+                <title>Pulsar {short} ({n})</title>
+                <pubDate>{email.utils.formatdate()}</pubDate>
+                <sparkle:version>{n}</sparkle:version>
+                <sparkle:shortVersionString>{short} ({n})</sparkle:shortVersionString>
+                <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+                <description><![CDATA[<pre>{notes}</pre>]]></description>
+                <enclosure url="{url}" type="application/octet-stream" {sig} />
+              </item>
+            </channel>
+          </rss>
+          """)
+          EOF
+          cat build/appcast.xml
+          gh release delete "$TAG" --cleanup-tag -y 2>/dev/null || true
+          gh release create "$TAG" build/Pulsar.zip build/appcast.xml --title "Pulsar build $N" --notes-file build/notes.txt --latest
