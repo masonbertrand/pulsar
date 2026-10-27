@@ -30,7 +30,7 @@ final class GoogleTasks: ObservableObject {
 
     /// At launch: if a login is saved, start syncing.
     func avvia() {
-        guard !clientID.isEmpty, Portachiavi.leggi() != nil else { return }
+        guard !clientID.isEmpty, PortachiaviGoogle.leggi() != nil else { return }
         stato = .collegato
         AnimaCose.shared.start()
         pianifica()
@@ -64,7 +64,7 @@ final class GoogleTasks: ObservableObject {
         timer?.invalidate(); timer = nil
         listener?.cancel(); listener = nil
         token = nil
-        Portachiavi.cancella()
+        PortachiaviGoogle.cancella()
         daCompletare = []
         stato = .scollegato
     }
@@ -131,7 +131,7 @@ final class GoogleTasks: ObservableObject {
                 guard let d, let t = GoogleTasksAPI.token(d, now: Date()), let refresh = t.refresh else {
                     self.stato = .errore(T("Google non ha dato l'accesso", "Google didn't grant access")); return
                 }
-                Portachiavi.salva(refresh)
+                PortachiaviGoogle.salva(refresh)
                 self.token = t
                 self.stato = .collegato
                 AnimaCose.shared.start()
@@ -218,7 +218,7 @@ final class GoogleTasks: ObservableObject {
     /// A valid access token, refreshed with the saved login when it has expired. Nil if that fails.
     private func conToken(_ f: @escaping (String?) -> Void) {
         if let t = token, t.expires > Date() { f(t.access); return }
-        guard let refresh = Portachiavi.leggi() else { stato = .scollegato; f(nil); return }
+        guard let refresh = PortachiaviGoogle.leggi() else { stato = .scollegato; f(nil); return }
         var r = URLRequest(url: GoogleTasksAPI.tokenURL)
         r.httpMethod = "POST"
         r.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
@@ -251,7 +251,7 @@ final class GoogleTasks: ObservableObject {
 }
 
 /// The Google login (refresh token) in the login Keychain, readable only by Pulsar.
-enum Portachiavi {
+enum PortachiaviGoogle {
     private static let servizio = "Pulsar Google Tasks"
     private static var query: [String: Any] {
         [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: servizio, kSecAttrAccount as String: "refresh"]
