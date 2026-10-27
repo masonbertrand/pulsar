@@ -169,6 +169,43 @@ struct TileLayout: Codable, Equatable {
     }
 }
 
+/// 27/10: tiles wrap onto more rows instead of running off the screen. Rows are centred, like the single row was.
+enum TileFlow {
+    /// Greedy split, in order, into rows no wider than `maxWidth`. A tile wider than that gets a row of its own.
+    static func rows(_ widths: [CGFloat], maxWidth: CGFloat, gap: CGFloat) -> [[Int]] {
+        var out: [[Int]] = [], row: [Int] = [], w: CGFloat = 0
+        for (i, tw) in widths.enumerated() {
+            let next = row.isEmpty ? tw : w + gap + tw
+            if !row.isEmpty && next > maxWidth { out.append(row); row = [i]; w = tw } else { row.append(i); w = next }
+        }
+        if !row.isEmpty { out.append(row) }
+        return out
+    }
+
+    static func width(_ row: [Int], _ widths: [CGFloat], gap: CGFloat) -> CGFloat {
+        row.reduce(CGFloat(0)) { $0 + widths[$1] } + CGFloat(max(0, row.count - 1)) * gap
+    }
+
+    /// Where a dragged tile lands, as the index to pass to `TileLayout.move` (counted without the dragged tile).
+    /// `dx` and `dy` are how far it moved, `dy` positive downwards; `rowStep` is row height plus gap.
+    static func dropIndex(dragged: Int, widths: [CGFloat], maxWidth: CGFloat, gap: CGFloat, rowStep: CGFloat, dx: CGFloat, dy: CGFloat) -> Int {
+        let rs = rows(widths, maxWidth: maxWidth, gap: gap)
+        let full = rs.map { width($0, widths, gap: gap) }.max() ?? 0
+        var centre: [Int: (row: Int, x: CGFloat)] = [:]
+        for (r, row) in rs.enumerated() {
+            var x = (full - width(row, widths, gap: gap)) / 2
+            for i in row { centre[i] = (r, x + widths[i] / 2); x += widths[i] + gap }
+        }
+        guard let me = centre[dragged] else { return dragged }
+        let row = min(max(me.row + Int((dy / rowStep).rounded()), 0), rs.count - 1)
+        let x = me.x + dx
+        return widths.indices.filter { i in
+            guard i != dragged, let c = centre[i] else { return false }
+            return c.row < row || (c.row == row && c.x < x)
+        }.count
+    }
+}
+
 // MARK: - Meteo (Open-Meteo)
 
 struct WeatherNow: Equatable {

@@ -25,6 +25,14 @@ final class TileModel: ObservableObject {
         didSet { Impostazioni.set(layout.encode(), .isolaTiles) }
     }
     @Published var editing = false
+    /// 27/10: the widest a row of tiles may be on this screen; past it they wrap. Set by the island.
+    @Published var maxRowWidth: CGFloat = .greatestFiniteMagnitude
+
+    /// The rows the island shows, as indices into `visible` (the saved tiles that have a widget).
+    static func rows(_ visible: [Tile], maxWidth: CGFloat) -> [[Int]] {
+        TileFlow.rows(visible.map { tileWidth($0.cells) }, maxWidth: maxWidth, gap: TileMetrics.gap)
+    }
+    static func tileWidth(_ cells: Int) -> CGFloat { CGFloat(cells) * TileMetrics.cell + CGFloat(cells - 1) * TileMetrics.gap }
 }
 
 // MARK: - La riga di tessere
@@ -34,36 +42,39 @@ struct TileRow: View {
     let widgets: [IslandWidget]
     @State private var dragID: String?
     @State private var dragDX: CGFloat = 0
+    @State private var dragDY: CGFloat = 0
     @State private var startMouse: CGFloat = 0
+    @State private var startMouseY: CGFloat = 0
     @State private var resizeBase: Int?
     @State private var appeared = false
 
-    private func width(_ cells: Int) -> CGFloat { CGFloat(cells) * TileMetrics.cell + CGFloat(cells - 1) * TileMetrics.gap }
+    private func width(_ cells: Int) -> CGFloat { TileModel.tileWidth(cells) }
     private var shown: [(Tile, IslandWidget)] {
         tiles.layout.tiles.compactMap { t in widgets.first { $0.id == t.id }.map { (t, $0) } }
     }
 
+    private var rows: [[Int]] { TileModel.rows(shown.map(\.0), maxWidth: tiles.maxRowWidth) }
+
     private var rowWidth: CGFloat {
-        shown.reduce(CGFloat(0)) { $0 + width($1.0.cells) } + CGFloat(max(0, shown.count - 1)) * TileMetrics.gap
+        let w = shown.map { width($0.0.cells) }
+        return rows.map { TileFlow.width($0, w, gap: TileMetrics.gap) }.max() ?? 0
     }
 
     var body: some View {
+        let all = shown
         VStack(spacing: 8) {
-            // 27/10: tessere più larghe dello schermo allargavano il pannello e spingevano fuori le icone in alto
-            // (Casa, Tessere, Personalizza). Se non ci stanno, la riga scorre di lato.
-            ViewThatFits(in: .horizontal) {
-                row
-                ScrollView(.horizontal, showsIndicators: false) { row.padding(6) }.padding(-6)   // spazio per il meno in modifica, che sporge
+            // 27/10: tiles wider than the screen pushed the panel, and the buttons at the top, off both edges.
+            // Now they wrap onto another row and the island grows taller, so every tile stays in sight.
+            VStack(spacing: TileMetrics.gap) {
+                ForEach(rows, id: \.self) { row in
+                    HStack(spacing: TileMetrics.gap) {
+                        ForEach(row, id: \.self) { i in tile(all[i].0, all[i].1, index: i) }
+                    }
+                }
             }
             if tiles.editing { chips }
         }
         .onAppear { appeared = true }
-    }
-
-    private var row: some View {
-        HStack(spacing: TileMetrics.gap) {
-            ForEach(Array(shown.enumerated()), id: \.element.0.id) { i, pair in tile(pair.0, pair.1, index: i) }
-        }
     }
 
     private func tile(_ t: Tile, _ w: IslandWidget, index: Int) -> some View {
@@ -84,7 +95,7 @@ struct TileRow: View {
             }
         }
         .frame(width: width(t.cells), height: TileMetrics.rowH)
-        .offset(x: dragID == t.id ? dragDX : 0)
+        .offset(x: dragID == t.id ? dragDX : 0, y: dragID == t.id ? dragDY : 0)
         .zIndex(dragID == t.id ? 1 : 0)
         .opacity(appeared ? 1 : 0)                          // le tessere entrano una dopo l'altra
         .offset(y: appeared ? 0 : -8)
@@ -105,23 +116,24 @@ struct TileRow: View {
             }.onEnded { _ in resizeBase = nil })
     }
 
-    /// Trascinando una tessera si sposta: al rilascio va dove cade il suo centro.
+    /// Trascinando una tessera si sposta: al rilascio va dove cade il suo centro, anche su un'altra riga.
     private func reorder(_ t: Tile) -> some Gesture {
         DragGesture(minimumDistance: 6).onChanged { _ in
-            if dragID != t.id { dragID = t.id; startMouse = NSEvent.mouseLocation.x }
+            if dragID != t.id { dragID = t.id; startMouse = NSEvent.mouseLocation.x; startMouseY = NSEvent.mouseLocation.y }
             dragDX = NSEvent.mouseLocation.x - startMouse
+            dragDY = startMouseY - NSEvent.mouseLocation.y          // screen y grows upwards, the view's downwards
         }.onEnded { _ in
-            var x: CGFloat = 0, center: CGFloat = 0
-            var centers: [(String, CGFloat)] = []
-            for (tt, _) in shown {
-                let w = width(tt.cells)
-                centers.append((tt.id, x + w / 2))
-                if tt.id == t.id { center = x + w / 2 }
-                x += w + TileMetrics.gap
+            let visible = shown.map(\.0)
+            if let me = visible.firstIndex(where: { $0.id == t.id }) {
+                let target = TileFlow.dropIndex(dragged: me, widths: visible.map { width($0.cells) }, maxWidth: tiles.maxRowWidth,
+                                                gap: TileMetrics.gap, rowStep: TileMetrics.rowH + TileMetrics.gap, dx: dragDX, dy: dragDY)
+                // the index counts visible tiles only: land just before the visible tile that will follow it
+                let others = visible.filter { $0.id != t.id }
+                let saved = tiles.layout.tiles.filter { $0.id != t.id }
+                let at = target < others.count ? (saved.firstIndex { $0.id == others[target].id } ?? saved.count) : saved.count
+                tiles.layout.move(t.id, to: at)
             }
-            let target = centers.filter { $0.0 != t.id && $0.1 < center + dragDX }.count
-            tiles.layout.move(t.id, to: target)
-            dragID = nil; dragDX = 0
+            dragID = nil; dragDX = 0; dragDY = 0
         }
     }
 
