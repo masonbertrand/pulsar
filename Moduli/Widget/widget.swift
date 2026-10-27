@@ -43,14 +43,27 @@ struct TileRow: View {
         tiles.layout.tiles.compactMap { t in widgets.first { $0.id == t.id }.map { (t, $0) } }
     }
 
+    private var rowWidth: CGFloat {
+        shown.reduce(CGFloat(0)) { $0 + width($1.0.cells) } + CGFloat(max(0, shown.count - 1)) * TileMetrics.gap
+    }
+
     var body: some View {
         VStack(spacing: 8) {
-            HStack(spacing: TileMetrics.gap) {
-                ForEach(Array(shown.enumerated()), id: \.element.0.id) { i, pair in tile(pair.0, pair.1, index: i) }
+            // 27/10: tessere più larghe dello schermo allargavano il pannello e spingevano fuori le icone in alto
+            // (Casa, Tessere, Personalizza). Se non ci stanno, la riga scorre di lato.
+            ViewThatFits(in: .horizontal) {
+                row
+                ScrollView(.horizontal, showsIndicators: false) { row.padding(6) }.padding(-6)   // spazio per il meno in modifica, che sporge
             }
             if tiles.editing { chips }
         }
         .onAppear { appeared = true }
+    }
+
+    private var row: some View {
+        HStack(spacing: TileMetrics.gap) {
+            ForEach(Array(shown.enumerated()), id: \.element.0.id) { i, pair in tile(pair.0, pair.1, index: i) }
+        }
     }
 
     private func tile(_ t: Tile, _ w: IslandWidget, index: Int) -> some View {
@@ -133,7 +146,7 @@ struct TileRow: View {
                 }
             }
         }
-        .frame(width: max(200, shown.reduce(CGFloat(0)) { $0 + width($1.0.cells) } + CGFloat(max(0, shown.count - 1)) * TileMetrics.gap), height: 26)
+        .frame(maxWidth: max(200, rowWidth)).frame(height: 26)   // al massimo larga quanto la riga, mai più dello spazio che c'è
         .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.92), .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing))
     }
 }
