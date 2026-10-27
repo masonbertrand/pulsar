@@ -1,0 +1,31 @@
+name: Build Pulsar
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    # macOS 26 (Tahoe) on Apple silicon, as build.sh requires
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          xcrun swiftc --version
+
+      - name: Build
+        run: ./build.sh
+
+      - name: Package
+        # ditto keeps the symlinks inside Sparkle.framework, so the code signature stays valid
+        run: ditto -c -k --keepParent build/Pulsar.app build/Pulsar.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pulsar
+          path: build/Pulsar.zip
+          retention-days: 30
