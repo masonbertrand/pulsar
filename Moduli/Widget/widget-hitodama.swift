@@ -203,11 +203,12 @@ struct StatsWidget: IslandWidget {
     func body(cells: Int) -> AnyView { AnyView(StatsTile(st: .shared, perf: .shared, cells: cells)) }
 }
 
-/// Le app che usano più memoria e la velocità della rete. Solo mentre la tessera si vede.
+/// Le app che usano più memoria, i programmi che usano più CPU (27/10) e la velocità della rete. Solo mentre la tessera si vede.
 final class PerfMonitor: ObservableObject {
     static let shared = PerfMonitor()
-    struct AppUse: Identifiable { var id: String { name }; var name: String; var mb: Double }
+    struct AppUse: Identifiable { var id: String { name }; var name: String; var mb: Double; var cpu: Double = 0 }
     @Published private(set) var top: [AppUse] = []
+    @Published private(set) var busiest: [AppUse] = []
     @Published private(set) var down: Double = 0      // byte al secondo
     @Published private(set) var up: Double = 0
     private var timer: Timer?
@@ -225,17 +226,10 @@ final class PerfMonitor: ObservableObject {
 
     private func sample() {
         q.async { [self] in
-            // memoria per app: somma dei processi dentro lo stesso .app
-            var per: [String: Double] = [:]
-            for l in SysToggles.run("/bin/ps", ["-axo", "rss=,comm="]).split(separator: "\n") {
-                let parts = l.trimmingCharacters(in: .whitespaces).split(separator: " ", maxSplits: 1)
-                guard parts.count == 2, let kb = Double(parts[0]) else { continue }
-                let path = String(parts[1])
-                guard let r = path.range(of: ".app/") else { continue }
-                let name = URL(fileURLWithPath: String(path[..<r.lowerBound])).lastPathComponent
-                per[name, default: 0] += kb / 1024
-            }
-            let top = per.sorted { $0.value > $1.value }.prefix(4).map { AppUse(name: $0.key, mb: $0.value) }
+            // memoria e CPU per programma: i processi dentro lo stesso .app contano per l'app (stats-logica.swift)
+            let rows = ProcessUse.parse(SysToggles.run("/bin/ps", ["-axo", "%cpu=,rss=,comm="]))
+            let top = ProcessUse.topMemory(rows, 4).map { AppUse(name: $0.name, mb: $0.mb, cpu: $0.cpu) }
+            let busiest = ProcessUse.topCPU(rows, 4).map { AppUse(name: $0.name, mb: $0.mb, cpu: $0.cpu) }
             // rete: byte entrati e usciti su tutte le interfacce vere
             var rin: UInt64 = 0, rout: UInt64 = 0
             var seen = Set<String>()
@@ -252,7 +246,7 @@ final class PerfMonitor: ObservableObject {
                 d = Double(rin - i0) / dt; u = Double(rout - o0) / dt
             }
             last = (now, rin, rout)
-            DispatchQueue.main.async { self.top = top; self.down = d; self.up = u }
+            DispatchQueue.main.async { self.top = top; self.busiest = busiest; self.down = d; self.up = u }
         }
     }
 
@@ -266,17 +260,67 @@ private struct StatsTile: View {
     @ObservedObject var perf: PerfMonitor
     let cells: Int
     private let tick = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
+    /// 27/10: a click flips the tile to the programs using the most processing power, and back.
+    @State private var dettaglio = false
     var body: some View {
+        Group {
+            if dettaglio { busiest } else { panoramica }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture { withAnimation(.easeOut(duration: 0.18)) { dettaglio.toggle() } }
+        .hint(dettaglio ? T("Clicca per tornare", "Click to go back") : T("Clicca per le app più impegnate", "Click for the busiest apps"))
+        .onAppear { st.refreshStats(); perf.watch(true) }
+        .onDisappear { perf.watch(false) }
+        .onReceive(tick) { _ in st.refreshStats() }
+    }
+
+    /// Top 4 by CPU; with room, their memory too. Activity Monitor one click away.
+    private var busiest: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Text(T("App più impegnate", "Busiest apps")).font(.system(size: 9.5)).foregroundStyle(Color.primary.opacity(0.5))
+                Spacer(minLength: 4)
+                Button {
+                    NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Activity Monitor.app"))
+                } label: {
+                    Image(systemName: "arrow.up.forward.app").font(.system(size: 10)).foregroundStyle(Color.primary.opacity(0.6))
+                        .frame(width: 18, height: 14).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hint(T("Apri Monitoraggio Attività", "Open Activity Monitor"))
+            }
+            if perf.busiest.isEmpty {
+                Text(T("Misuro…", "Measuring…")).font(.system(size: 10)).foregroundStyle(Color.primary.opacity(0.5))
+            }
+            ForEach(perf.busiest.prefix(cells >= 2 ? 4 : 3)) { a in
+                HStack(spacing: 6) {
+                    Text(a.name).font(.system(size: 10)).lineLimit(1)
+                    Spacer(minLength: 4)
+                    if cells >= 3 {
+                        Text(ProcessUse.mbText(a.mb)).font(.system(size: 9.5).monospacedDigit()).foregroundStyle(Color.primary.opacity(0.45))
+                    }
+                    Text(ProcessUse.cpuText(a.cpu)).font(.system(size: 9.5, weight: .medium).monospacedDigit())
+                        .foregroundStyle(a.cpu > 80 ? Night.amber : Color.primary.opacity(0.8))
+                        .frame(minWidth: 34, alignment: .trailing)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var panoramica: some View {
         HStack(alignment: .center, spacing: 12) {
             ring(st.memoryUsed, "RAM")
             if cells >= 2 { ring(st.cpu, "CPU") }
             if cells >= 3 {
                 VStack(alignment: .leading, spacing: 3) {
-                    ForEach(perf.top.prefix(cells >= 4 ? 4 : 3)) { a in
+                    // 27/10: who uses the processing power, not the memory (that's in the click-through list)
+                    ForEach(perf.busiest.prefix(cells >= 4 ? 4 : 3)) { a in
                         HStack(spacing: 6) {
                             Text(a.name).font(.system(size: 10)).lineLimit(1)
                             Spacer(minLength: 4)
-                            Text(a.mb > 1024 ? String(format: "%.1f GB", a.mb / 1024) : String(format: "%.0f MB", a.mb))
+                            Text(ProcessUse.cpuText(a.cpu))
                                 .font(.system(size: 9.5).monospacedDigit()).foregroundStyle(Color.primary.opacity(0.55))
                         }
                     }
@@ -289,10 +333,6 @@ private struct StatsTile: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear { st.refreshStats(); perf.watch(true) }
-        .onDisappear { perf.watch(false) }
-        .onReceive(tick) { _ in st.refreshStats() }
     }
 
     private func ring(_ v: Double, _ label: String) -> some View {
