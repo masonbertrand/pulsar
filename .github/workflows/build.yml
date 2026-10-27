@@ -1,7 +1,8 @@
 name: Build Pulsar
 
-# Every push to main builds Pulsar on macOS 26 and, once the signing secrets are set, publishes it as a
-# GitHub Release with an appcast. The installed app checks that appcast every few minutes and updates itself.
+# Every push builds and tests Pulsar on macOS 26. Pushes to main also publish it, once the signing secrets
+# are set, as a GitHub Release with an appcast; the installed app checks that appcast every few minutes and
+# updates itself. Other branches only build and test, so work in progress never reaches the app.
 #
 # Secrets (Settings > Secrets and variables > Actions):
 #   SIGNING_CERT_P12       base64 of the self-signed code-signing certificate (.p12)
@@ -12,13 +13,13 @@ name: Build Pulsar
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: ['**']
 
 permissions:
   contents: write   # to publish releases
 
 concurrency:
-  group: build
+  group: build-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -31,12 +32,15 @@ jobs:
     # macOS 26 (Tahoe) on Apple silicon, as build.sh requires
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Toolchain
         run: |
           sw_vers
           xcrun swiftc --version
+
+      - name: Tests
+        run: ./tests.sh
 
       - name: Signing
         id: sign
@@ -79,7 +83,7 @@ jobs:
         # ditto keeps the symlinks inside Sparkle.framework, so the code signature stays valid
         run: ditto -c -k --keepParent build/Pulsar.app build/Pulsar.zip
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: Pulsar
           path: build/Pulsar.zip
@@ -122,3 +126,11 @@ jobs:
           cat build/appcast.xml
           gh release delete "$TAG" --cleanup-tag -y 2>/dev/null || true
           gh release create "$TAG" build/Pulsar.zip build/appcast.xml --title "Pulsar build $N" --notes-file build/notes.txt --latest
+
+      - name: Keep the last 10 releases
+        if: steps.sign.outputs.release == 'true' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --limit 200 --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[10:] | .[].tagName' |
+            while read -r tag; do gh release delete "$tag" --cleanup-tag -y; done
