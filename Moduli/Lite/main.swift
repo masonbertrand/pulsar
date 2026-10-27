@@ -385,6 +385,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         isola.agentStore = agent.store
         isola.model.openGrid = { [weak self] in self?.griglia.open() }
         isola.model.toggleTheme = { [weak self] in self?.agent.cycleMode() }
+        // 27/10: automatic updates wait while Claude needs an answer, the island is open, or a meeting is close
+        Aggiornamenti.shared.occupato = { [weak self] in
+            guard let self else { return false }
+            let r = CalendarModel.shared.prossimaRiunione
+            return !UpdateTiming.canRestart(claudeWaiting: agent.store.hasPending || agent.store.question != nil,
+                                            islandOpen: isola.model.state == .expanded || isola.model.state == .alert,
+                                            meeting: r.map { (start: $0.start, end: $0.end) }, now: Date())
+        }
         collegaPagineLite()
         // fase 3: la pagina Generale cambia l'aspetto con gli stessi metodi del menu TEMA (setTema e setAgentLook)
         FinestraImpostazioni.shared.scegliAspetto = { [weak self] m in

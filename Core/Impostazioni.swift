@@ -9,6 +9,8 @@ enum Chiave: String, CaseIterable {
     case appleIconAppearanceTheme = "AppleIconAppearanceTheme"
     case appleInterfaceStyle = "AppleInterfaceStyle"
     case aggiornamentiAutomatici   // fase 5, 3b: Sparkle cerca gli aggiornamenti da solo (acceso se mancante, solo vendita)
+    case aggiornamentoNota         // 27/10: the update about to be installed, shown in the notch after the relaunch
+    case aggiornamentoVersione     // its CFBundleVersion, so the note only shows if the update really happened
     case agentEnabled
     case agentLook
     case agentLookNotte

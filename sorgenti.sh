@@ -47,5 +47,5 @@ kit_flag() { echo "-I $1 -L $1 -lRowlineKit"; }
 # Fase 5, 3b: gli aggiornamenti con Sparkle (Vendor/Sparkle/LEGGIMI.md). Il file si compila in tutte e due le build,
 # ma il suo codice sta dentro #if !PERSONALE: solo la vendita importa Sparkle, e solo la vendita passa questi flag.
 # rpath: l'app cerca Sparkle.framework in Contents/Frameworks, dove lo copia build-vendita.sh.
-MODULI+=(Moduli/Lite/aggiornamenti.swift)
+MODULI+=(Moduli/Lite/aggiornamenti.swift Moduli/Lite/aggiornamenti-logica.swift)
 SPARKLE=(-F Vendor/Sparkle -framework Sparkle -Xlinker -rpath -Xlinker @executable_path/../Frameworks)
