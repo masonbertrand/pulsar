@@ -173,7 +173,7 @@ private struct Documentino: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .offset(y: on ? -3 : 0)
-        .help(aiuto)
+        .hint(aiuto)
     }
 }
 
@@ -241,7 +241,7 @@ private struct Icona: View {
         }
         .buttonStyle(.plain)
         .onHover { sopra = $0 }
-        .help(aiuto)
+        .hint(aiuto)
     }
 }
 
@@ -296,7 +296,7 @@ struct MutaSection: View {
                             .background(Capsule().fill(muta.attesaMinuti == m ? Volta.a2.opacity(0.22) : .clear))
                     }
                     .buttonStyle(.plain)
-                    .help(T("Aspetta \(m) minuti prima di spostare", "Waits \(m) minutes before moving"))
+                    .hint(T("Aspetta \(m) minuti prima di spostare", "Waits \(m) minutes before moving"))
                 }
             }
         }
@@ -332,7 +332,7 @@ struct MutaSection: View {
         }
         .buttonStyle(.plain)
         .padding(.top, 16)
-        .help(T("Una volta sola, poi si annulla dal resoconto", "Once, and you can undo it from the report"))
+        .hint(T("Una volta sola, poi si annulla dal resoconto", "Once, and you can undo it from the report"))
     }
 
     private func meta(_ r: Regola) -> String {
@@ -374,7 +374,7 @@ private struct Cartellina: View {
         }
         .buttonStyle(.plain)
         .onHover { h in withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { sopra = h } }
-        .help(cestino ? T("Gli screenshot vanno nel Cestino", "Screenshots go to the Trash") : T("Cambia cartella", "Change folder"))
+        .hint(cestino ? T("Gli screenshot vanno nel Cestino", "Screenshots go to the Trash") : T("Cambia cartella", "Change folder"))
     }
     private var cestino: Bool { regola.destinazione == .cestino }
     /// Il simbolo dalla regola: le estensioni dicono il tipo.
@@ -409,6 +409,6 @@ private struct Scelta: View {
                 .symbolEffect(.bounce, value: on)
         }
         .buttonStyle(.plain)
-        .help(aiuto + (on ? T(": acceso", ": on") : T(": spento", ": off")))
+        .hint(aiuto + (on ? T(": acceso", ": on") : T(": spento", ": off")))
     }
 }

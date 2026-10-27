@@ -684,8 +684,16 @@ final class IslandModule {
                 else { w = 600; h = notch.height + 8 + 150 }
             } else if model.tab == .tessere {
                 // più bassa della Casa (l'autore, 17/10); il cambio di scheda ridisegna subito, quindi niente più icone coperte
-                w = min(max(700, model.tiles.layout.width(cell: TileMetrics.cell, gap: TileMetrics.gap) + 40), sf.width - 40)
-                h = notch.height + 8 + TileMetrics.rowH + 10 + (model.tiles.editing ? 32 : 0)
+                // 27/10: as wide as the widest row, never wider than the screen; past that the tiles wrap and it grows taller
+                let maxRow = sf.width - 80
+                if model.tiles.maxRowWidth != maxRow { model.tiles.maxRowWidth = maxRow }
+                let visible = model.tiles.layout.tiles.filter { t in model.widgets.contains { $0.id == t.id } }
+                let rows = TileModel.rows(visible, maxWidth: maxRow)
+                let widths = visible.map { TileModel.tileWidth($0.cells) }
+                let widest = rows.map { TileFlow.width($0, widths, gap: TileMetrics.gap) }.max() ?? 0
+                let n = CGFloat(max(1, rows.count))
+                w = min(max(700, widest + 40), sf.width - 40)
+                h = notch.height + 8 + n * TileMetrics.rowH + (n - 1) * TileMetrics.gap + 10 + (model.tiles.editing ? 32 : 0)
             } else {
                 // 24/10: a freddo (né Claude né musica che suona) un riquadro solo, un pelo più stretto
                 let freddo = model.anteprimaFredda || ((agentSource?.isActive != true) && ((model.home as? MediaSource)?.track?.playing != true))

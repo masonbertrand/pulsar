@@ -160,11 +160,11 @@ private struct MessagesTile: View {
                     Button { pinned = pinned == c.name ? "" : c.name } label: {
                         Image(systemName: pinned == c.name ? "pin.fill" : "pin").font(.system(size: 9)).foregroundStyle(Color.primary.opacity(0.6))
                     }
-                    .buttonStyle(.plain).help(T("Fissa questa chat", "Pin this chat"))
+                    .buttonStyle(.plain).hint(T("Fissa questa chat", "Pin this chat"))
                     Button { next() } label: {
                         Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.primary.opacity(0.6))
                     }
-                    .buttonStyle(.plain).help(T("Chat successiva", "Next chat"))
+                    .buttonStyle(.plain).hint(T("Chat successiva", "Next chat"))
                 }
             }
             Text(c.text).font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.62)).lineLimit(lines)
@@ -448,7 +448,7 @@ private struct RecentsTile: View {
                     }
                     Circle().fill(e.running ? Color.primary.opacity(0.6) : .clear).frame(width: 3, height: 3)
                 }
-                .help(e.running ? e.name : T("\(e.name), chiusa: clic per riaprire", "\(e.name), closed: click to reopen"))
+                .hint(e.running ? e.name : T("\(e.name), chiusa: clic per riaprire", "\(e.name), closed: click to reopen"))
                 .onTapGesture { recents.open(e) }
             }
         }

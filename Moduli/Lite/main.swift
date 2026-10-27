@@ -385,6 +385,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         isola.agentStore = agent.store
         isola.model.openGrid = { [weak self] in self?.griglia.open() }
         isola.model.toggleTheme = { [weak self] in self?.agent.cycleMode() }
+        // 27/10: automatic updates wait while Claude needs an answer, the island is open, or a meeting is close
+        Aggiornamenti.shared.occupato = { [weak self] in
+            guard let self else { return false }
+            let r = CalendarModel.shared.prossimaRiunione
+            return !UpdateTiming.canRestart(claudeWaiting: agent.store.hasPending || agent.store.question != nil,
+                                            islandOpen: isola.model.state == .expanded || isola.model.state == .alert,
+                                            meeting: r.map { (start: $0.start, end: $0.end) }, now: Date())
+        }
         collegaPagineLite()
         // fase 3: la pagina Generale cambia l'aspetto con gli stessi metodi del menu TEMA (setTema e setAgentLook)
         FinestraImpostazioni.shared.scegliAspetto = { [weak self] m in
@@ -408,6 +416,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         registro.applica(sbloccati: LicenzaViva.shared.sbloccati)
         LicenzaViva.shared.avvio()   // fase 2: inizio della prova al primo avvio, controllo Gumroad al massimo ogni 30 giorni
         Aggiornamenti.shared.avvia()   // fase 5, 3b: Sparkle, controllo automatico secondo l'interruttore della pagina Generale
+        GoogleTasks.shared.avvia()     // 27/10: the To-do tile synced with Google Tasks, only if you connected it
         // fase 3: il benvenuto al primo avvio, solo nella vendita (nella build personale si apre con pulsar://benvenuto).
         // Alla chiusura (Fatto o la finestra chiusa) FinestraBenvenuto libera i moduli in attesa.
         if apreBenvenuto { DispatchQueue.main.async { FinestraBenvenuto.shared.apri() } }

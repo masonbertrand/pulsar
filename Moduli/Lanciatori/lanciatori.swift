@@ -379,7 +379,7 @@ private struct Cerchio: View {
         .buttonStyle(Stringi())
         .offset(y: hover && lato > 30 ? -2 : 0)
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: hover)
-        .help(voce.n)
+        .hint(voce.n)
         .onHover { dentro in
             hover = dentro
             // 25/10: il nome lo cancella la griglia quando il mouse esce da tutta la griglia, non il cerchio:
@@ -901,7 +901,7 @@ private struct StashTutti: View {
                             ForEach(g.voci) { v in
                                 Button { dock.apri(v) } label: { IconaSito(dock: dock, aspetto: aspetto, voce: v, lato: Self.lato) }
                                     .buttonStyle(Stringi())
-                                    .help(v.n)
+                                    .hint(v.n)
                                     .onHover { d in if d { sopra = v.n } else if sopra == v.n { sopra = nil } }
                             }
                         }

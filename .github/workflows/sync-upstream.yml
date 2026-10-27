@@ -1,0 +1,48 @@
+name: Sync with the original Pulsar
+
+# Every Monday, merges the original author's changes (juliendesigncraft/pulsar) into main, then starts a build,
+# which publishes the update to the installed app. If their changes clash with ours, nothing is pushed and the run
+# fails, so GitHub emails you; ask Claude to merge it by hand.
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write   # a push made with the workflow token doesn't start other workflows, so the build is started by hand
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Merge upstream
+        id: merge
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/juliendesigncraft/pulsar.git
+          git fetch upstream main
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "Already up to date."
+            exit 0
+          fi
+          git log --oneline HEAD..upstream/main
+          if ! git merge upstream/main --no-edit -m "Merge the original author's latest changes"; then
+            git merge --abort
+            echo "::error::The author's changes conflict with ours. Nothing was pushed."
+            exit 1
+          fi
+          git push origin HEAD:main
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build and publish
+        if: steps.merge.outputs.pushed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run build.yml --ref main
