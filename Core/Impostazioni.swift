@@ -71,6 +71,7 @@ enum Chiave: String, CaseIterable {
     case isolaPrioritaLarga
     case isolaThumb
     case isolaTiles
+    case isolaTilesLavoro   // 27/10: the Work tab's tiles
     case isolaTray
     case isolaUltimoBrano
     case isolaWAChat

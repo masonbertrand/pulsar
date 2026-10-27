@@ -12,6 +12,19 @@ enum TileMetrics {
     static let radius: CGFloat = 20
 }
 
+/// 27/10: every tile does something when clicked. Buttons inside a tile still win over this.
+enum TileOpen {
+    static func app(_ name: String) { NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/\(name).app")) }
+    static func url(_ s: String) { if let u = URL(string: s) { NSWorkspace.shared.open(u) } }
+}
+
+extension View {
+    /// The whole tile is clickable, and says what a click does when you hover it.
+    func tileTap(_ hint: String, _ action: @escaping () -> Void) -> some View {
+        frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle()).onTapGesture(perform: action).hint(hint)
+    }
+}
+
 protocol IslandWidget {
     var id: String { get }
     var title: String { get }
@@ -20,9 +33,16 @@ protocol IslandWidget {
 }
 
 /// Layout salvato (UserDefaults `isolaTiles`) e modalità modifica, condivisi fra riga e isola.
+/// 27/10: one per tiles tab: Tiles keeps `isolaTiles`, Work has its own (`isolaTilesLavoro`), so each is arranged on its own.
 final class TileModel: ObservableObject {
-    @Published var layout: TileLayout = TileLayout.decode(Impostazioni.data(.isolaTiles)) {
-        didSet { Impostazioni.set(layout.encode(), .isolaTiles) }
+    private let chiave: Chiave
+    @Published var layout: TileLayout {
+        didSet { Impostazioni.set(layout.encode(), chiave) }
+    }
+    init(chiave: Chiave = .isolaTiles, standard: TileLayout = .standard) {
+        self.chiave = chiave
+        let d = Impostazioni.data(chiave)
+        layout = d == nil ? standard : TileLayout.decode(d)
     }
     @Published var editing = false
     /// 27/10: the widest a row of tiles may be on this screen; past it they wrap. Set by the island.
@@ -379,6 +399,13 @@ final class WeatherModel: ObservableObject {
     @Published private(set) var place = ""
     @Published private(set) var failed = false
     private var fetchedAt = Date.distantPast
+    private var fetchedFahrenheit: Bool?
+
+    /// 27/10: °F when the Mac is set to Fahrenheit (Language & Region → Temperature), °C otherwise.
+    static var fahrenheit: Bool {
+        if let u = UserDefaults.standard.string(forKey: "AppleTemperatureUnit") { return u == "Fahrenheit" }
+        return Locale.current.measurementSystem == .us
+    }
 
     /// La città si imposta dal menu o toccando la tessera; solo questo nome parte verso Open-Meteo.
     var city: String {
@@ -394,8 +421,9 @@ final class WeatherModel: ObservableObject {
 
     func refreshIfNeeded(force: Bool = false) {
         guard !city.isEmpty else { return }
-        guard force || Date().timeIntervalSince(fetchedAt) > 1800 else { return }
-        fetchedAt = Date()
+        let f = Self.fahrenheit
+        guard force || fetchedFahrenheit != f || Date().timeIntervalSince(fetchedAt) > 1800 else { return }
+        fetchedAt = Date(); fetchedFahrenheit = f
         let c = city
         locate(c) { [weak self] p in
             guard let self, let p else { DispatchQueue.main.async { self?.failed = true }; return }
@@ -403,7 +431,8 @@ final class WeatherModel: ObservableObject {
             comp.queryItems = [URLQueryItem(name: "latitude", value: String(p.lat)), URLQueryItem(name: "longitude", value: String(p.lon)),
                                URLQueryItem(name: "current", value: "temperature_2m,weather_code,is_day"),
                                URLQueryItem(name: "daily", value: "temperature_2m_max,temperature_2m_min"),
-                               URLQueryItem(name: "timezone", value: "auto"), URLQueryItem(name: "forecast_days", value: "1")]
+                               URLQueryItem(name: "timezone", value: "auto"), URLQueryItem(name: "forecast_days", value: "1"),
+                               URLQueryItem(name: "temperature_unit", value: f ? "fahrenheit" : "celsius")]
             URLSession.shared.dataTask(with: URLRequest(url: comp.url!, timeoutInterval: 8)) { data, _, _ in
                 let w = data.flatMap(WeatherParse.forecast)
                 DispatchQueue.main.async { self.now = w; self.place = p.name; self.failed = w == nil }
@@ -444,7 +473,11 @@ struct WeatherWidget: IslandWidget {
     let id = "weather"
     var title: String { T("Meteo", "Weather") }
     let symbol = "cloud.sun"
-    func body(cells: Int) -> AnyView { AnyView(WeatherTile(model: .shared, cells: cells)) }
+    func body(cells: Int) -> AnyView {
+        AnyView(WeatherTile(model: .shared, cells: cells).tileTap(T("Apri Meteo", "Open Weather")) {
+            if WeatherModel.shared.city.isEmpty { WeatherModel.shared.askCity() } else { TileOpen.app("Weather") }
+        })
+    }
 }
 
 private struct WeatherTile: View {
@@ -591,7 +624,7 @@ struct CalendarWidget: IslandWidget {
     let id = "calendar"
     var title: String { T("Evento", "Event") }
     let symbol = "calendar"
-    func body(cells: Int) -> AnyView { AnyView(CalendarTile(model: .shared, cells: cells)) }
+    func body(cells: Int) -> AnyView { AnyView(CalendarTile(model: .shared, cells: cells).tileTap(T("Apri Calendario", "Open Calendar")) { TileOpen.app("Calendar") }) }
 }
 
 private struct CalendarTile: View {

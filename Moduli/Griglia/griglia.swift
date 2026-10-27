@@ -271,7 +271,7 @@ final class GridModule {
         let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main ?? NSScreen.screens[0]
         if win == nil {
             let w = GridPanel()
-            w.contentView = NSHostingView(rootView: GridView(model: model, tiles: island.tiles, widgets: island.widgets,
+            w.contentView = NSHostingView(rootView: GridView(model: model, tiles: island.tilesMain, widgets: island.widgets,
                                                              close: { [weak self] in self?.close(reactivate: true) },
                                                              launch: { [weak self] in self?.launch($0) },
                                                              pick: { [weak self] in self?.pick($0) }))

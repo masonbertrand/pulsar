@@ -2,6 +2,7 @@
 // Spec: docs/2026-10-11-isola-design.md. Logica pura (stati, scelta della fonte) in isola-logica.swift.
 // Una fonte dice cosa mostrare; l'isola sceglie chi comanda e si apre, si chiude e segue l'aspetto (Theme).
 import SwiftUI
+import Combine
 import AppKit
 
 /// Ombra leggera sotto l'isola (l'autore, 11/10 sera): dark matte al 10%, solo perché si sollevi dal fondo.
@@ -70,7 +71,10 @@ final class IslandModel: ObservableObject {
     var openGrid: (() -> Void)?               // la griglia delle app (griglia.swift)
     var toggleTheme: (() -> Void)?            // Dark Matte / White Matte per tutto lo schermo (Temi.scegli)
     var home: IslandSource?          // cosa si vede aprendo l'isola quando nessuna fonte è attiva
-    let tiles = TileModel()
+    let tilesMain = TileModel()
+    let tilesWork = TileModel(chiave: .isolaTilesLavoro, standard: .lavoro)
+    /// 27/10: the tiles of the tab you're looking at (Tiles or Work); on Home, the Tiles ones.
+    var tiles: TileModel { tab == .lavoro ? tilesWork : tilesMain }
     var widgets: [IslandWidget] = []
     var notchWidth: CGFloat = 190
     var notchHeight: CGFloat = 32
@@ -81,7 +85,13 @@ final class IslandModel: ObservableObject {
     // prima restava della misura vecchia per qualche secondo e la Casa copriva le icone in alto.
     /// 24/10: anteprima della Casa a freddo anche mentre Claude lavora (pulsar://isola?freddo=1, freddo=0 la toglie)
     @Published var anteprimaFredda = false { didSet { if anteprimaFredda != oldValue { DispatchQueue.main.async { self.dropChanged?() } } } }
-    @Published var tab: IslandTab = .casa { didSet { if tab != oldValue { DispatchQueue.main.async { self.dropChanged?() } } } }
+    @Published var tab: IslandTab = .casa {
+        didSet {
+            guard tab != oldValue else { return }
+            tilesMain.editing = false; tilesWork.editing = false          // editing ends when you switch tab
+            DispatchQueue.main.async { self.dropChanged?() }
+        }
+    }
     weak var agent: AgentStore?
     @Published var dropHover = false
     @Published var dropNote: DropNote?
@@ -435,7 +445,8 @@ final class IslandModule {
         RecentApps.shared.start()
         // 12/10 notte: WhatsApp si legge dall'avvio se la tessera è nella riga, così non mostra "chiuso" per i primi secondi
         if model.tiles.layout.tiles.contains(where: { $0.id == "messages" }) { WhatsAppReader.shared.retain() }
-        tilesWatch = model.tiles.objectWillChange.sink { [weak self] in DispatchQueue.main.async { self?.layout(animated: true) } }
+        tilesWatch = model.tilesMain.objectWillChange.merge(with: model.tilesWork.objectWillChange)
+            .sink { [weak self] in DispatchQueue.main.async { self?.layout(animated: true) } }
         media.onChange = { [weak self] in self?.layout(animated: true) }
         sources.append(media)
         media.start()
@@ -614,14 +625,14 @@ final class IslandModule {
         hover = false
         dwellWork?.cancel(); dwellWork = nil
         hoverWork?.cancel(); hoverWork = nil
-        model.tiles.editing = false
+        model.tilesMain.editing = false; model.tilesWork.editing = false
         layout(animated: true)
     }
 
     private func clickOutside() {
         guard pinnedOpen || model.tiles.editing, let f = win?.frame, !contentFrame(f).contains(NSEvent.mouseLocation) else { return }
         pinnedOpen = false
-        model.tiles.editing = false
+        model.tilesMain.editing = false; model.tilesWork.editing = false
         layout(animated: true)
     }
 
@@ -682,7 +693,7 @@ final class IslandModule {
                 if let a = s as? AgentIslandSource { w = 680; h = notch.height + 8 + a.height + 10 }
                 else if let ps = s.panelSize { w = ps.width; h = notch.height + 8 + ps.height + 10 }   // 25/10: misurata sul contenuto
                 else { w = 600; h = notch.height + 8 + 150 }
-            } else if model.tab == .tessere {
+            } else if model.tab.isTiles {
                 // più bassa della Casa (l'autore, 17/10); il cambio di scheda ridisegna subito, quindi niente più icone coperte
                 // 27/10: as wide as the widest row, never wider than the screen; past that the tiles wrap and it grows taller
                 let maxRow = sf.width - 80

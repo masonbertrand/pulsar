@@ -122,7 +122,10 @@ struct VWho: View {
 
 // MARK: - Testa del pannello
 
-enum IslandTab { case casa, tessere }
+enum IslandTab {
+    case casa, tessere, lavoro       // 27/10: Work, a second set of tiles for getting things done
+    var isTiles: Bool { self != .casa }
+}
 
 /// Nella fascia ai lati del notch, come in coucou: a sinistra casa e tessere (più Personalizza nelle tessere),
 /// a destra lo stato o, nelle tessere, i pulsanti di prima (impostazioni, griglia, volume, luce, tema, AirDrop, File, Note).
@@ -138,7 +141,8 @@ struct IslandHead: View {
             HStack(spacing: 2) {
                 icon("house.fill", T("Casa", "Home"), on: model.tab == .casa) { model.tab = .casa }
                 icon("square.grid.2x2.fill", T("Tessere", "Tiles"), on: model.tab == .tessere) { model.tab = .tessere }
-                if model.tab == .tessere {
+                icon("briefcase.fill", T("Lavoro", "Work"), on: model.tab == .lavoro) { model.tab = .lavoro }
+                if model.tab.isTiles {
                     icon(tiles.editing ? "checkmark" : "plus", T("Personalizza", "Customize"), on: tiles.editing) { tiles.editing.toggle() }
                 }
                 Spacer(minLength: 0)
@@ -147,7 +151,7 @@ struct IslandHead: View {
             Spacer(minLength: 0)
             HStack(spacing: 2) {
                 Spacer(minLength: 0)
-                if model.tab == .tessere {
+                if model.tab.isTiles {
                     icon("gearshape", T("Impostazioni di Sistema", "System Settings")) { IslandActions.settings() }
                     icon("square.grid.3x3", T("Griglia app", "App grid")) { model.openGrid?() }
                     if let d = model.dial {
@@ -315,8 +319,8 @@ struct IslandPanelContent: View {
                 Group {
                     if let s = model.source, !s.usesHome {
                         s.expandedView()
-                    } else if model.tab == .tessere {
-                        TileRow(tiles: model.tiles, widgets: model.widgets)
+                    } else if model.tab.isTiles {
+                        TileRow(tiles: model.tiles, widgets: model.widgets).id(model.tab)
                     } else {
                         IslandCasa(model: model).frame(height: 128)
                     }
@@ -633,7 +637,7 @@ struct CasaFredda: View {
     @ObservedObject var model: IslandModel
     var body: some View {
         if let media = model.home as? MediaSource { ConMusica(media: media, store: model.agent) }
-        else { WelcomeCard(store: model.agent, volo: true) }
+        else { CasaGlance(media: nil) }
     }
     /// Osserva la musica: quando riparte la Casa torna alla tessera musicale, quando si ferma al riquadro unico.
     private struct ConMusica: View {
@@ -646,7 +650,89 @@ struct CasaFredda: View {
                     WelcomeCard(store: store).frame(width: 250)
                 }
             } else {
-                WelcomeCard(store: store, volo: true, media: media)
+                CasaGlance(media: media)     // 27/10: at a glance instead of the empty sky
+            }
+        }
+    }
+}
+
+/// 27/10: Home when nothing is playing and Claude isn't working. It used to be a sky with a rocket, which read as empty;
+/// now it's the day at a glance: the time and what's left to do, the next event, the weather. Each card opens its app.
+struct CasaGlance: View {
+    var media: MediaSource?
+    @ObservedObject private var cal = CalendarModel.shared
+    @ObservedObject private var meteo = WeatherModel.shared
+    @ObservedObject private var cose = AnimaCose.shared
+    private var lingua: Locale { Locale(identifier: pulsarItalian ? "it_IT" : "en_US") }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            oggi.tileTap(T("Aggiungi una cosa da fare", "Add a to-do")) { AnimaCoseNuova.chiedi() }
+            prossimo.tileTap(T("Apri Calendario", "Open Calendar")) { TileOpen.app("Calendar") }
+            tempo.frame(width: 150)
+                .tileTap(meteo.city.isEmpty ? T("Scegli la città", "Choose the city") : T("Apri Meteo", "Open Weather")) {
+                    if meteo.city.isEmpty { meteo.askCity() } else { TileOpen.app("Weather") }
+                }
+        }
+        .overlay { if let media { PausaPiccola(media: media) } }
+        .onAppear { cal.refresh(); meteo.refreshIfNeeded(); cose.start() }
+    }
+
+    private var oggi: some View {
+        VCard(padding: 14) {
+            TimelineView(.everyMinute) { ctx in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(ctx.date.formatted(date: .omitted, time: .shortened)).font(.system(size: 30, weight: .light)).tracking(-0.6)
+                        .foregroundStyle(Volta.t1).monospacedDigit()
+                    Text(ctx.date.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(lingua)))
+                        .font(.system(size: 12)).foregroundStyle(Volta.t2).lineLimit(1)
+                    Spacer(minLength: 2)
+                    let n = cose.aperte.count
+                    Text(n == 0 ? T("Niente da fare", "Nothing to do") : n == 1 ? T("1 cosa da fare", "1 thing to do") : T("\(n) cose da fare", "\(n) things to do"))
+                        .font(.system(size: 11.5)).foregroundStyle(Volta.t3)
+                }
+            }
+        }
+    }
+
+    private var prossimo: some View {
+        VCard(padding: 14) {
+            TimelineView(.everyMinute) { ctx in
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(T("Prossimo", "Next")).font(.system(size: 11.5)).foregroundStyle(Volta.t3)
+                    if cal.denied {
+                        Text(T("Consenti il Calendario", "Allow Calendar")).font(.system(size: 13)).foregroundStyle(Night.amber)
+                    } else if let n = cal.next {
+                        Text(n.title).font(.system(size: 15, weight: .medium)).foregroundStyle(Volta.t1).lineLimit(2)
+                        let ora = n.allDay ? T("Tutto il giorno", "All day") : n.start.formatted(date: .omitted, time: .shortened)
+                        let giorno = ProssimoEvento.giorno(n.start, ora: ctx.date, inglese: !pulsarItalian)
+                        Text(giorno.map { "\($0) · \(ora)" } ?? ora).font(.system(size: 12)).foregroundStyle(Volta.t2).lineLimit(1)
+                    } else {
+                        Text(T("Niente questa settimana", "Nothing this week")).font(.system(size: 13)).foregroundStyle(Volta.t2)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
+
+    private var tempo: some View {
+        VCard(padding: 14) {
+            VStack(alignment: .leading, spacing: 2) {
+                if let w = meteo.now {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text("\(Int(w.temp.rounded()))°").font(.system(size: 30, weight: .light)).foregroundStyle(Volta.t1)
+                        Image(systemName: WeatherParse.symbol(code: w.code, isDay: w.isDay)).symbolRenderingMode(.multicolor).font(.system(size: 18))
+                    }
+                    Text("\(T("Max", "H")) \(Int(w.hi.rounded()))°  \(T("Min", "L")) \(Int(w.lo.rounded()))°")
+                        .font(.system(size: 11.5).monospacedDigit()).foregroundStyle(Volta.t2)
+                    Spacer(minLength: 0)
+                    Text(meteo.place).font(.system(size: 11.5)).foregroundStyle(Volta.t3).lineLimit(1)
+                } else {
+                    Image(systemName: "cloud.sun").font(.system(size: 22)).foregroundStyle(Volta.t3)
+                    Spacer(minLength: 0)
+                    Text(meteo.city.isEmpty ? T("Scegli la città", "Choose the city") : "…").font(.system(size: 11.5)).foregroundStyle(Volta.t3)
+                }
             }
         }
     }

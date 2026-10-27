@@ -127,6 +127,9 @@ struct TileLayout: Codable, Equatable {
 
     static let standard = TileLayout(tiles: [Tile(id: "music", cells: 2), Tile(id: "weather", cells: 2),
                                              Tile(id: "calendar", cells: 2), Tile(id: "timer", cells: 1)])
+    /// 27/10: the Work tab's first layout: what's next, what to do, a focus timer, and what you were just working with.
+    static let lavoro = TileLayout(tiles: [Tile(id: "calendar", cells: 2), Tile(id: "todo", cells: 3), Tile(id: "timer", cells: 1),
+                                           Tile(id: "clipboard", cells: 2), Tile(id: "recents", cells: 2)])
 
     static func clamp(_ n: Int) -> Int { min(max(n, minCells), maxCells) }
 

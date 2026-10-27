@@ -340,7 +340,8 @@ private struct TrayTile: View {
                 Image(systemName: "tray.and.arrow.down").font(.system(size: 18)).foregroundStyle(Color.primary.opacity(0.45))
                 if cells > 1 { Text(T("Trascina qui i file", "Drop files here")).font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.55)) }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // 27/10: or click to pick them
+            .tileTap(T("Scegli i file da tenere qui", "Choose files to keep here")) { scegli() }
         } else {
             HStack(spacing: 8) {
                 ForEach(tray.files.suffix(max(1, cells * 2 - 1)), id: \.self) { u in TrayFile(url: u, tray: tray) }
@@ -348,6 +349,13 @@ private struct TrayTile: View {
             }
             .frame(maxHeight: .infinity)
         }
+    }
+
+    private func scegli() {
+        NSApp.activate(ignoringOtherApps: true)
+        let p = NSOpenPanel()
+        p.allowsMultipleSelection = true; p.canChooseDirectories = true
+        if p.runModal() == .OK { tray.add(p.urls) }
     }
 }
 
@@ -462,7 +470,11 @@ struct MacWidget: IslandWidget {
     let id = "mac"
     var title: String { "Mac" }
     let symbol = "laptopcomputer"
-    func body(cells: Int) -> AnyView { AnyView(MacTile(st: .shared, cells: cells)) }
+    func body(cells: Int) -> AnyView {
+        AnyView(MacTile(st: .shared, cells: cells).tileTap(T("Impostazioni Batteria", "Battery settings")) {
+            TileOpen.url("x-apple.systempreferences:com.apple.Battery-Settings.extension")
+        })
+    }
 }
 
 private struct MacTile: View {

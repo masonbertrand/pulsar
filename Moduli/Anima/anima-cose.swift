@@ -213,7 +213,18 @@ struct TodoWidget: IslandWidget {
     let id = "todo"
     var title: String { T("Cose da fare", "To-do") }
     let symbol = "checklist"
-    func body(cells: Int) -> AnyView { AnyView(TodoTile(cose: .shared, cells: cells)) }
+    func body(cells: Int) -> AnyView {
+        AnyView(TodoTile(cose: .shared, cells: cells).overlay(alignment: .topTrailing) {
+            // 27/10: type a to-do, not only say it
+            Button { TodoTile.nuova() } label: {
+                Image(systemName: "plus").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.primary.opacity(0.6))
+                    .frame(width: 18, height: 18).background(Circle().fill(Color.primary.opacity(0.08))).contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .hint(T("Aggiungi una cosa da fare", "Add a to-do"))
+            .offset(x: 4, y: -4)
+        })
+    }
 }
 
 private struct TodoTile: View {
@@ -259,9 +270,9 @@ private struct TodoTile: View {
         } else if righe.isEmpty {
             VStack(spacing: 4) {
                 Image(systemName: "checklist").font(.system(size: 18)).foregroundStyle(Color.primary.opacity(0.45))
-                if cells > 1 { Text(T("Tieni ⌃⌘ e dimmi cosa", "Hold ⌃⌘ and tell me")).font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.55)) }
+                if cells > 1 { Text(T("Clicca o tieni ⌃⌘ e dimmi", "Click, or hold ⌃⌘ and say it")).font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.55)) }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .tileTap(T("Aggiungi una cosa da fare", "Add a to-do")) { Self.nuova() }
         } else if cells == 1 {
             VStack(spacing: 4) {
                 Image(systemName: "checklist").font(.system(size: 18))
@@ -280,6 +291,9 @@ private struct TodoTile: View {
             }
         }
     }
+
+    /// 27/10: a to-do typed in a small box (the same kind as the weather city).
+    static func nuova() { AnimaCoseNuova.chiedi() }
 
     private func riga(_ testo: String, fatto: Bool, esterna: Bool, _ tap: @escaping () -> Void) -> some View {
         HStack(spacing: 7) {
@@ -300,5 +314,21 @@ private struct TodoTile: View {
 
     private func aiuto(_ esterna: Bool) -> String {
         return T("Fatto", "Done")
+    }
+}
+
+/// 27/10: the small box that adds a to-do, used by the To-do tile and by Home.
+enum AnimaCoseNuova {
+    static func chiedi() {
+        NSApp.activate(ignoringOtherApps: true)
+        let a = NSAlert()
+        a.messageText = T("Nuova cosa da fare", "New to-do")
+        let f = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24)); f.placeholderString = T("Cosa c'è da fare?", "What needs doing?")
+        a.accessoryView = f
+        a.window.initialFirstResponder = f
+        a.addButton(withTitle: T("Aggiungi", "Add")); a.addButton(withTitle: T("Annulla", "Cancel"))
+        guard a.runModal() == .alertFirstButtonReturn else { return }
+        let t = f.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !t.isEmpty { AnimaCose.shared.start(); AnimaCose.shared.aggiungi(t) }
     }
 }
