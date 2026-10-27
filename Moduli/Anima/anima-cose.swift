@@ -9,7 +9,10 @@ import AppKit
 final class AnimaCose: ObservableObject {
     static let shared = AnimaCose()
 
-    struct Todo: Codable, Identifiable, Equatable { var id = UUID().uuidString; var testo: String; var fatto = false; var quando: Date? }
+    struct Todo: Codable, Identifiable, Equatable {
+        var id = UUID().uuidString; var testo: String; var fatto = false; var quando: Date?
+        var gid: String? = nil      // 27/10: the matching Google task, when Google Tasks is connected (google-tasks.swift)
+    }
     struct Programma: Codable, Identifiable { var id = UUID().uuidString; var quando: Date; var azioni: String; var detto: String }
     struct Routine: Codable, Identifiable { var id = UUID().uuidString; var ora: String; var giorni: String; var azioni: String; var detto: String; var ultimo: String? }
     struct Step: Identifiable, Equatable { var id: String; var titolo: String }
@@ -62,11 +65,12 @@ final class AnimaCose: ObservableObject {
 
     // MARK: cose da fare
 
-    func aggiungi(_ s: String, quando: Date? = nil) { todo.insert(Todo(testo: s, quando: quando), at: 0); salva() }
+    func aggiungi(_ s: String, quando: Date? = nil) { todo.insert(Todo(testo: s, quando: quando), at: 0); salva(); GoogleTasks.shared.sync() }
     func spunta(_ t: Todo) {
         guard let i = todo.firstIndex(of: t) else { return }
         todo[i].fatto.toggle()
         salva()
+        if todo[i].fatto, let g = todo[i].gid { GoogleTasks.shared.completata(gid: g) }
         // le cose fatte escono dalla lista dopo un attimo, così si vede la spunta
         if todo[i].fatto {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
@@ -75,6 +79,22 @@ final class AnimaCose: ObservableObject {
         }
     }
     var aperte: [Todo] { todo }   // le spuntate escono da sole dopo 1,5 s (spunta)
+
+    /// 27/10: what a Google Tasks sync found different (TasksSync.plan). New Google tasks go at the bottom.
+    func applicaGoogle(_ p: TasksSync.Plan) {
+        guard !p.removeLocal.isEmpty || !p.renameLocal.isEmpty || !p.addLocal.isEmpty else { return }
+        todo.removeAll { p.removeLocal.contains($0.id) }
+        for r in p.renameLocal { if let i = todo.firstIndex(where: { $0.id == r.id }) { todo[i].testo = r.title } }
+        todo += p.addLocal.map { Todo(testo: $0.title, gid: $0.id) }
+        salva()
+    }
+
+    /// 27/10: an item sent to Google now knows its Google id.
+    func collegaGoogle(_ id: String, gid: String) {
+        guard let i = todo.firstIndex(where: { $0.id == id }) else { return }
+        todo[i].gid = gid
+        salva()
+    }
 
     // MARK: il tempo
 

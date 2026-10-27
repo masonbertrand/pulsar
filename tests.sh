@@ -4,7 +4,8 @@
 set -e
 cd "$(dirname "$0")"
 LOGICA=(Core/Riunione.swift Moduli/Isola/isola-logica.swift
-  Moduli/Widget/calendario-logica.swift Moduli/Lite/aggiornamenti-logica.swift)
+  Moduli/Widget/calendario-logica.swift Moduli/Lite/aggiornamenti-logica.swift
+  Moduli/Anima/google-tasks-logica.swift)
 mkdir -p build
 swiftc -D DA_SORGENTE $LOGICA tests/*.swift -o build/pulsar-tests
 ./build/pulsar-tests

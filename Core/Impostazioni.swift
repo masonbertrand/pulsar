@@ -11,6 +11,9 @@ enum Chiave: String, CaseIterable {
     case aggiornamentiAutomatici   // fase 5, 3b: Sparkle cerca gli aggiornamenti da solo (acceso se mancante, solo vendita)
     case aggiornamentoNota         // 27/10: the update about to be installed, shown in the notch after the relaunch
     case aggiornamentoVersione     // its CFBundleVersion, so the note only shows if the update really happened
+    case googleClientID            // 27/10: Google Tasks (Moduli/Anima/google-tasks.swift); the login itself is in the Keychain
+    case googleClientSecret
+    case googleDaCompletare        // Google task ids ticked off here, not yet confirmed by Google
     case agentEnabled
     case agentLook
     case agentLookNotte
