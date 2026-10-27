@@ -532,11 +532,12 @@ final class CalendarModel: ObservableObject {
 
     private func load() {
         let cal = Calendar.current, now = Date()
-        guard let endOfDay = cal.date(bySettingHour: 23, minute: 59, second: 59, of: now) else { return }
-        let events = store.events(matching: store.predicateForEvents(withStart: now, end: endOfDay, calendars: nil))
-        let timed = events.filter { !$0.isAllDay }.sorted { $0.startDate < $1.startDate }
-        let pick = timed.first ?? events.first
-        let nuovo = pick.map(Self.voce)
+        // 27/10: looks ahead up to a week, so an empty evening shows tomorrow's first event instead of "Nothing for today"
+        guard let fine = cal.date(byAdding: .day, value: ProssimoEvento.giorni, to: cal.startOfDay(for: now)) else { return }
+        let events = store.events(matching: store.predicateForEvents(withStart: now, end: fine, calendars: nil))
+            .filter { $0.startDate != nil && $0.endDate != nil && $0.status != .canceled }
+        let pick = ProssimoEvento.scegli(events.map { .init(start: $0.startDate, end: $0.endDate, allDay: $0.isAllDay) }, ora: now)
+        let nuovo = pick.map { Self.voce(events[$0]) }
         if nuovo != next { next = nuovo }
 
         // fase 4: la prossima riunione, nelle prossime 24 ore (una iniziata da poco c'è ancora)
@@ -589,11 +590,13 @@ private struct CalendarTile: View {
                         if model.denied {
                             Text(T("Consenti il Calendario", "Allow Calendar")).font(.system(size: 11)).foregroundStyle(Night.amber)
                         } else if let n = model.next {
+                            let quando = n.allDay ? T("Tutto il giorno", "All day") : "\(Self.hour.string(from: n.start)) - \(Self.hour.string(from: n.end))"
+                            let giorno = ProssimoEvento.giorno(n.start, ora: date, inglese: !pulsarItalian)
                             Text(n.title).font(.system(size: 12, weight: .medium)).lineLimit(2)
-                            Text(n.allDay ? T("Tutto il giorno", "All day") : "\(Self.hour.string(from: n.start)) - \(Self.hour.string(from: n.end))")
-                                .font(.system(size: 10).monospacedDigit()).foregroundStyle(Color.primary.opacity(0.55))
+                            Text(giorno.map { "\($0) · \(quando)" } ?? quando)
+                                .font(.system(size: 10).monospacedDigit()).foregroundStyle(Color.primary.opacity(0.55)).lineLimit(1)
                         } else {
-                            Text(T("Niente per oggi", "Nothing for today")).font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.55))
+                            Text(T("Niente questa settimana", "Nothing this week")).font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.55))
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
