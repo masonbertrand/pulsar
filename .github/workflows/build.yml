@@ -40,7 +40,8 @@ jobs:
           xcrun swiftc --version
 
       - name: Tests
-        run: ./tests.sh
+        run: ./tests.sh 2>&1 | tee build-tests.log; exit ${pipestatus[1]}
+        shell: zsh {0}
 
       - name: Signing
         id: sign
@@ -74,10 +75,20 @@ jobs:
           PULSAR_SIGN_IDENTITY: ${{ steps.sign.outputs.identity }}
           PULSAR_FEED_URL: ${{ steps.sign.outputs.release && env.FEED_URL || '' }}
           PULSAR_ED_PUBLIC_KEY: ${{ steps.sign.outputs.release && env.ED_PUBLIC_KEY || '' }}
+        shell: zsh {0}
         run: |
-          ./build.sh
+          set -e
+          ./build.sh 2>&1 | tee build.log; [[ ${pipestatus[1]} == 0 ]]
           codesign --verify --deep --strict build/Pulsar.app
           codesign -d -r- build/Pulsar.app
+
+      - name: Show compiler errors
+        if: failure()
+        # turns swiftc errors into annotations, readable on the run page and through the API
+        run: |
+          cat build-tests.log build.log 2>/dev/null | grep -E '^(/|[A-Za-z]).*:[0-9]+:[0-9]+: error: ' | sort -u | head -40 |
+            sed -E 's#^('"$PWD"'/)?([^:]+):([0-9]+):([0-9]+): error: (.*)#::error file=\2,line=\3,col=\4::\2:\3 \5#'
+          grep '^FAIL ' build-tests.log 2>/dev/null | sed 's/^/::error::/' || true
 
       - name: Package
         # ditto keeps the symlinks inside Sparkle.framework, so the code signature stays valid
