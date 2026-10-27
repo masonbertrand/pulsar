@@ -416,7 +416,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         registro.applica(sbloccati: LicenzaViva.shared.sbloccati)
         LicenzaViva.shared.avvio()   // fase 2: inizio della prova al primo avvio, controllo Gumroad al massimo ogni 30 giorni
         Aggiornamenti.shared.avvia()   // fase 5, 3b: Sparkle, controllo automatico secondo l'interruttore della pagina Generale
-        GoogleTasks.shared.avvia()     // 27/10: the To-do tile synced with Google Tasks, only if you connected it
         // fase 3: il benvenuto al primo avvio, solo nella vendita (nella build personale si apre con pulsar://benvenuto).
         // Alla chiusura (Fatto o la finestra chiusa) FinestraBenvenuto libera i moduli in attesa.
         if apreBenvenuto { DispatchQueue.main.async { FinestraBenvenuto.shared.apri() } }

@@ -39,7 +39,6 @@ struct PaginaIsola: View {
                                 WeatherModel.shared.askCity()
                             }
                         }
-                        GruppoImpostazioni("Google Tasks") { RigaGoogleTasks(g: .shared) }
                         GruppoImpostazioni(T("Comparse", "Peeks")) {
                             RigaInterruttore(T("Notifiche e Non disturbare", "Notifications and Focus"), valore: { PeekPrefs.notifications }) { PeekPrefs.notifications = $0 }
                             RigaInterruttore(T("Batteria e salute del Mac", "Battery and Mac health"), valore: { PeekPrefs.system }) { PeekPrefs.system = $0 }
@@ -63,28 +62,6 @@ struct PaginaIsola: View {
                     }
                 } }
             }
-        }
-    }
-}
-
-/// 27/10: connect the To-do tile to Google Tasks. Follows the connection live, the sign-in finishes in the browser.
-private struct RigaGoogleTasks: View {
-    @ObservedObject var g: GoogleTasks
-    var body: some View {
-        switch g.stato {
-        case .collegato:
-            RigaTasto(T("Cose da fare con Google Tasks", "To-do synced with Google Tasks"), sotto: T("Collegato", "Connected"),
-                      tasto: T("Scollega", "Disconnect")) { g.scollega() }
-        case .inAttesa:
-            RigaTasto(T("Cose da fare con Google Tasks", "To-do synced with Google Tasks"), sotto: T("Accedi nel browser…", "Sign in in your browser…"),
-                      tasto: T("Annulla", "Cancel")) { g.scollega() }
-        case .errore(let e):
-            RigaTasto(T("Cose da fare con Google Tasks", "To-do synced with Google Tasks"), sotto: e,
-                      tasto: T("Collega…", "Connect…"), principale: true) { g.collega() }
-        case .scollegato:
-            RigaTasto(T("Cose da fare con Google Tasks", "To-do synced with Google Tasks"),
-                      sotto: T("Aggiungi e spunta da tutte e due le parti", "Add and tick off on either side"),
-                      tasto: T("Collega…", "Connect…"), principale: true) { g.collega() }
         }
     }
 }
