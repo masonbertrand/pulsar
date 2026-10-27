@@ -3,7 +3,7 @@
 # CORE = il nucleo comune, MODULI = tutto il resto dell'app.
 CORE=(Core/Impostazioni.swift Core/Persona.swift Core/Cartelle.swift Core/Licenza.swift Core/Moduli.swift Core/LicenzaViva.swift Core/Tema.swift Core/Pannelli.swift Core/Strumenti.swift
   Core/Bordi.swift Core/Sfondo.swift Core/Leggera.swift Core/Razzo.swift
-  Core/PermessiPannelli.swift Core/Permessi.swift Core/CollegaClaude.swift Core/Scorciatoie.swift Core/BenvenutoLogica.swift Core/Riunione.swift)
+  Core/PermessiPannelli.swift Core/Permessi.swift Core/CollegaClaude.swift Core/Scorciatoie.swift Core/BenvenutoLogica.swift Core/Riunione.swift Core/Suggerimento.swift)
 
 MODULI=(
   Moduli/Lite/main.swift Moduli/Agent/agente.swift Moduli/Agent/agente-linea.swift Moduli/Agent/agente-finestra.swift

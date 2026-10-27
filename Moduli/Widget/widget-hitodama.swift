@@ -135,7 +135,7 @@ private struct ControlChip: View {
         }
         .buttonStyle(.plain)
         .onHover { over = $0 }
-        .help(label)
+        .hint(label)
     }
 }
 
@@ -170,7 +170,7 @@ private struct PowerTile: View {
                     .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Volta.card2))
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain).help(a.1)
+                .buttonStyle(.plain).hint(a.1)
             }
         }
     }

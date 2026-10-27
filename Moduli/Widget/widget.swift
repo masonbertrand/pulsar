@@ -90,6 +90,7 @@ struct TileRow: View {
                     Image(systemName: "minus.circle.fill").font(.system(size: 16)).foregroundStyle(Night.red, Color.primary.opacity(0.9))
                 }
                 .buttonStyle(.plain)
+                .hint(T("Togli la tessera", "Remove tile"))
                 .offset(x: -5, y: -5)
                 HStack { Spacer(); handle(t) }
             }
@@ -109,6 +110,7 @@ struct TileRow: View {
         Capsule().fill(Color.primary.opacity(0.55)).frame(width: 4, height: 30)
             .frame(width: 18, height: TileMetrics.rowH)
             .contentShape(Rectangle())
+            .hint(T("Trascina per allargare o stringere", "Drag to resize"))
             .gesture(DragGesture(minimumDistance: 0).onChanged { _ in
                 if resizeBase == nil { resizeBase = t.cells; startMouse = NSEvent.mouseLocation.x }
                 let dx = NSEvent.mouseLocation.x - startMouse
@@ -276,7 +278,7 @@ private struct MusicTile: View {
                         Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 9.5, weight: .semibold))
                             .foregroundStyle(Color.primary.opacity(0.55)).frame(width: 20, height: 20).contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain).help(T("Lettore a tutto schermo", "Full screen player"))
+                    .buttonStyle(.plain).hint(T("Lettore a tutto schermo", "Full screen player"))
                 }
                 .frame(maxHeight: .infinity, alignment: .top)
             }
@@ -325,6 +327,17 @@ private struct MusicTile: View {
     private func button(_ symbol: String, _ size: CGFloat, _ action: @escaping () -> Void) -> some View {
         Button(action: action) { Image(systemName: symbol).font(.system(size: size, weight: .medium)).frame(width: 20, height: 18).contentShape(Rectangle()) }
             .buttonStyle(.plain)
+            .hint(Self.nome(symbol))
+    }
+
+    private static func nome(_ symbol: String) -> String {
+        switch symbol {
+        case let s where s.hasPrefix("backward"): return T("Precedente", "Previous")
+        case let s where s.hasPrefix("forward"): return T("Successivo", "Next")
+        case let s where s.hasPrefix("pause"): return T("Pausa", "Pause")
+        case let s where s.hasPrefix("play"): return T("Riproduci", "Play")
+        default: return ""
+        }
     }
 }
 
@@ -654,6 +667,7 @@ private struct TimerTile: View {
                             .frame(width: 30, height: 24).background(Capsule().fill(Color.primary.opacity(0.1)))
                     }
                     .buttonStyle(.plain)
+                    .hint(left == nil ? T("Avvia il timer", "Start timer") : T("Ferma il timer", "Stop timer"))
                 }
             }
             .frame(maxWidth: .infinity)
@@ -669,5 +683,6 @@ private struct TimerTile: View {
                 .background(Circle().fill(Color.primary.opacity(0.08)))
         }
         .buttonStyle(.plain)
+        .hint(d < 0 ? T("5 minuti in meno", "5 minutes less") : T("5 minuti in più", "5 minutes more"))
     }
 }

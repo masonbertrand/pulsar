@@ -76,7 +76,7 @@ private struct AgentStepIcon: View {
                     Text("\(store.contextCount)").font(.system(size: 10.5, weight: .medium).monospacedDigit())
                 }
                 .foregroundStyle(Color.white.opacity(0.85))
-                .help(T("In attesa del tuo prossimo messaggio", "Waiting for your next message"))
+                .hint(T("In attesa del tuo prossimo messaggio", "Waiting for your next message"))
             }
             PastiglieInSequenza(kind: kind, waiting: s?.pending != nil || s?.question != nil)
         }
@@ -209,6 +209,6 @@ struct ChangeRow: View {
         }
         .buttonStyle(.plain)
         .onHover { hover = $0 }
-        .help(T("Vedi il diff", "See the diff"))
+        .hint(T("Vedi il diff", "See the diff"))
     }
 }

@@ -87,7 +87,7 @@ struct VPill: View {
         }
         .buttonStyle(.plain)
         .onHover { h in withAnimation(.easeOut(duration: 0.2)) { hover = h } }
-        .help(help ?? "")
+        .hint(help ?? "")
     }
     private var bg: Color {
         switch kind {
@@ -177,7 +177,7 @@ struct IslandHead: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .help(help)
+        .hint(help)
     }
 }
 
@@ -327,6 +327,7 @@ struct IslandPanelContent: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .hintLayer()        // 27/10: button names on hover (Core/Suggerimento.swift)
         .clipped()          // niente può allargare il pannello oltre la sua misura
     }
 
@@ -695,7 +696,7 @@ private struct PausaPiccola: View {
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
-            .help(T("Riprendi la musica", "Resume the music"))
+            .hint(T("Riprendi la musica", "Resume the music"))
             .padding(10)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
         }

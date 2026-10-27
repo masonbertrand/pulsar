@@ -289,7 +289,7 @@ private struct TodoTile: View {
                     .frame(width: 14, height: 14).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(aiuto(esterna))
+            .hint(aiuto(esterna))
             Text(testo).font(.system(size: 11)).lineLimit(1).strikethrough(fatto)
                 .foregroundStyle(Color.primary.opacity(fatto ? 0.4 : 0.85))
             Spacer(minLength: 0)
