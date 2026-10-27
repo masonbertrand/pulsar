@@ -220,6 +220,8 @@ private struct MusicCard: View {
                         else { LinearGradient(colors: [Volta.a2, Volta.a4], startPoint: .topLeading, endPoint: .bottomTrailing) }
                     }
                     .frame(width: 56, height: 56).clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .tileTap(T("Apri \(t?.app ?? "Spotify")", "Open \(t?.app ?? "Spotify")")) { apri(t?.app) }
+                    .frame(width: 56, height: 56)
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 7) {
                             if playing { PixelEQ(colors: cols, playing: true, cell: 2.4) }
@@ -241,9 +243,89 @@ private struct MusicCard: View {
                             }
                         }
                     }
+                    // 27/10: Home's music card can be played from, not only watched
+                    HStack(spacing: 4) {
+                        tasto("backward.fill", T("Precedente", "Previous")) { media.command(.previous) }
+                        tasto(playing ? "pause.fill" : "play.fill", playing ? T("Pausa", "Pause") : T("Riproduci", "Play"), grande: true) { media.command(.playPause) }
+                        tasto("forward.fill", T("Successivo", "Next")) { media.command(.next) }
+                    }
                 }
             }
         }
+
+        private func tasto(_ simbolo: String, _ nome: String, grande: Bool = false, _ azione: @escaping () -> Void) -> some View {
+            Button(action: azione) {
+                Image(systemName: simbolo).font(.system(size: grande ? 15 : 11, weight: .medium)).foregroundStyle(Volta.t1)
+                    .frame(width: grande ? 36 : 28, height: grande ? 36 : 28)
+                    .background(Circle().fill(grande ? Volta.pill : .clear))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .hint(nome)
+        }
+
+        private func apri(_ app: String?) {
+            let id = app == "Music" ? "com.apple.Music" : "com.spotify.client"
+            if let u = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
+                NSWorkspace.shared.openApplication(at: u, configuration: NSWorkspace.OpenConfiguration())
+            }
+        }
+    }
+}
+
+/// 27/10: next to the music on Home, instead of the sky: the next event, the weather and the to-dos, each one a click away.
+struct GlanceSide: View {
+    @ObservedObject private var cal = CalendarModel.shared
+    @ObservedObject private var meteo = WeatherModel.shared
+    @ObservedObject private var cose = AnimaCose.shared
+
+    var body: some View {
+        VCard(padding: 12) {
+            TimelineView(.everyMinute) { ctx in
+                VStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let n = cal.next {
+                            Text(n.title).font(.system(size: 13, weight: .medium)).foregroundStyle(Volta.t1).lineLimit(1)
+                            let ora = n.allDay ? T("Tutto il giorno", "All day") : n.start.formatted(date: .omitted, time: .shortened)
+                            let giorno = ProssimoEvento.giorno(n.start, ora: ctx.date, inglese: !pulsarItalian)
+                            Text(giorno.map { "\($0) · \(ora)" } ?? ora).font(.system(size: 11)).foregroundStyle(Volta.t2).lineLimit(1)
+                        } else {
+                            Text(cal.denied ? T("Consenti il Calendario", "Allow Calendar") : T("Niente questa settimana", "Nothing this week"))
+                                .font(.system(size: 12)).foregroundStyle(cal.denied ? Night.amber : Volta.t2)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle()).onTapGesture { TileOpen.app("Calendar") }.hint(T("Apri Calendario", "Open Calendar"))
+                    Spacer(minLength: 6)
+                    HStack(spacing: 10) {
+                        Group {
+                            if let w = meteo.now {
+                                HStack(spacing: 4) {
+                                    Image(systemName: WeatherParse.symbol(code: w.code, isDay: w.isDay)).symbolRenderingMode(.multicolor).font(.system(size: 13))
+                                    Text("\(Int(w.temp.rounded()))°").font(.system(size: 15, weight: .light)).foregroundStyle(Volta.t1)
+                                }
+                            } else {
+                                Image(systemName: "cloud.sun").font(.system(size: 13)).foregroundStyle(Volta.t3)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture { if meteo.city.isEmpty { meteo.askCity() } else { TileOpen.app("Weather") } }
+                        .hint(meteo.city.isEmpty ? T("Scegli la città", "Choose the city") : T("Apri Meteo", "Open Weather"))
+                        Spacer(minLength: 4)
+                        let n = cose.aperte.count
+                        Text(n == 0 ? T("Niente da fare", "Nothing to do") : T("\(n) da fare", "\(n) to do"))
+                            .font(.system(size: 11.5)).foregroundStyle(Volta.t2).lineLimit(1)
+                        Button { AnimaCoseNuova.chiedi() } label: {
+                            Image(systemName: "plus").font(.system(size: 10, weight: .semibold)).foregroundStyle(Volta.t1)
+                                .frame(width: 22, height: 22).background(Circle().fill(Volta.pill)).contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .hint(T("Aggiungi una cosa da fare", "Add a to-do"))
+                    }
+                }
+            }
+        }
+        .onAppear { cal.refresh(); meteo.refreshIfNeeded(); cose.start() }
     }
 }
 
@@ -647,7 +729,7 @@ struct CasaFredda: View {
             if media.track?.playing == true {
                 HStack(spacing: 8) {
                     MusicCard(media: media)
-                    WelcomeCard(store: store).frame(width: 250)
+                    GlanceSide().frame(width: 250)
                 }
             } else {
                 CasaGlance(media: media)     // 27/10: at a glance instead of the empty sky
