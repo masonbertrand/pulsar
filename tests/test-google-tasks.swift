@@ -1,7 +1,8 @@
 import Foundation
 
 func testGoogleTasks() {
-    typealias L = TasksSync.Local, R = TasksSync.Remote
+    typealias L = TasksSync.Local
+    typealias R = TasksSync.Remote
     // PKCE: the RFC 7636 example
     equal(GoogleTasksAPI.challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"), "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", "PKCE S256")
     let v = GoogleTasksAPI.verifier()
