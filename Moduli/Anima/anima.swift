@@ -629,7 +629,10 @@ final class AnimaSource: IslandSource {
         let righe = (testo as NSString).boundingRect(with: NSSize(width: w - margini, height: 400),
                                                      options: [.usesLineFragmentOrigin, .usesFontLeading],
                                                      attributes: [.font: corpo]).height
-        let alto = 22 + 8 + min(200, ceil(righe) + 2 * CGFloat(max(1, Int(ceil(righe / 17))))) + 6
+        // 28/10: split up, Xcode 26.3 gave up type-checking it in one expression
+        let interlinea: CGFloat = 2 * CGFloat(max(1, Int(ceil(righe / 17))))
+        let corpoAlto: CGFloat = min(200, ceil(righe) + interlinea)
+        let alto: CGFloat = 22 + 8 + corpoAlto + 6
         return CGSize(width: w, height: alto)
     }
     func compactLeading() -> AnyView { AnyView(AnimaGlyph(anima: anima).frame(width: 18, height: 18)) }
