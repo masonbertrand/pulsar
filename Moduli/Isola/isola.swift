@@ -13,6 +13,19 @@ enum IslandMetrics {
 }
 
 /// Una fonte dell'isola: musica, avvisi, finestre, widget. Mai lavoro pesante sul filo principale.
+/// 28/10: how the island feels. The user found it "too quick and unusable": it closed 0.05 s after the mouse left.
+enum IslandTiming {
+    /// The mouse rests on the notch this long before the island opens.
+    static let apertura: TimeInterval = 0.2
+    /// It waits this long after the mouse leaves before closing; coming back in time keeps it open.
+    static let chiusura: TimeInterval = 0.6
+    /// Points around the open island that still count as inside.
+    static let margine: CGFloat = 24
+    /// How long the window takes to open and to close.
+    static let apri: TimeInterval = 0.6
+    static let chiudi: TimeInterval = 0.5
+}
+
 protocol IslandSource: AnyObject {
     var id: String { get }
     var priority: Int { get }
@@ -85,6 +98,8 @@ final class IslandModel: ObservableObject {
     // prima restava della misura vecchia per qualche secondo e la Casa copriva le icone in alto.
     /// 24/10: anteprima della Casa a freddo anche mentre Claude lavora (pulsar://isola?freddo=1, freddo=0 la toglie)
     @Published var anteprimaFredda = false { didSet { if anteprimaFredda != oldValue { DispatchQueue.main.async { self.dropChanged?() } } } }
+    /// 28/10: the height every tab's content gets (the tallest of them), set by the island's layout.
+    @Published var altezzaContenuto: CGFloat = 196
     /// Does this source take over the panel with its own view? Claude's alerts don't on the Claude tab,
     /// which shows the same permission and question itself (28/10).
     func avviso(_ s: IslandSource) -> Bool { !s.usesHome && !(tab == .claude && s.id == "agent") }
@@ -601,20 +616,21 @@ final class IslandModule {
             if model.dropHover { model.setDropHover(false) }
         }
         var inside = wakeZone.contains(p)
-        if shown, let f = win?.frame, contentFrame(f).insetBy(dx: -6, dy: -6).contains(p) { inside = true }
+        // 28/10: a wider margin, so brushing past the edge doesn't count as leaving (was 6 pt)
+        if shown, let f = win?.frame, contentFrame(f).insetBy(dx: -IslandTiming.margine, dy: -IslandTiming.margine).contains(p) { inside = true }
         if inside {
             hoverWork?.cancel(); hoverWork = nil
             if !hover && dwellWork == nil {
                 let w = DispatchWorkItem { [weak self] in self?.dwellWork = nil; self?.hover = true; self?.layout(animated: true) }
                 dwellWork = w
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: w)
+                DispatchQueue.main.asyncAfter(deadline: .now() + IslandTiming.apertura, execute: w)
             }
         } else {
             dwellWork?.cancel(); dwellWork = nil
             if hover && hoverWork == nil {
                 let w = DispatchWorkItem { [weak self] in self?.hover = false; self?.hoverWork = nil; self?.layout(animated: true) }
                 hoverWork = w
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: w)
+                DispatchQueue.main.asyncAfter(deadline: .now() + IslandTiming.chiusura, execute: w)   // 28/10: was 0.05 s
             }
         }
     }
@@ -705,25 +721,24 @@ final class IslandModule {
                 if let a = s as? AgentIslandSource { w = 680; h = notch.height + 8 + a.height + 10 }
                 else if let ps = s.panelSize { w = ps.width; h = notch.height + 8 + ps.height + 10 }   // 25/10: misurata sul contenuto
                 else { w = 600; h = notch.height + 8 + 150 }
-            } else if model.tab.isTiles {
-                // più bassa della Casa (l'autore, 17/10); il cambio di scheda ridisegna subito, quindi niente più icone coperte
-                // 27/10: as wide as the widest row, never wider than the screen; past that the tiles wrap and it grows taller
-                let maxRow = sf.width - 80
-                if model.tiles.maxRowWidth != maxRow { model.tiles.maxRowWidth = maxRow }
-                let visible = model.tiles.layout.tiles.filter { t in model.widgets.contains { $0.id == t.id } }
-                let rows = TileModel.rows(visible, maxWidth: maxRow)
-                let widths = visible.map { TileModel.tileWidth($0.cells) }
-                let widest = rows.map { TileFlow.width($0, widths, gap: TileMetrics.gap) }.max() ?? 0
-                let n = CGFloat(max(1, rows.count))
-                w = min(max(700, widest + 40), sf.width - 40)
-                h = notch.height + IslandHead.data + 8 + n * TileMetrics.rowH + (n - 1) * TileMetrics.gap + 8 + IslandBarra.alta + (model.tiles.editing ? 32 : 0)
-            } else if model.tab == .claude {
-                w = 780; h = notch.height + IslandHead.data + 8 + ClaudeTab.altezza + 8 + IslandBarra.alta
             } else {
-                // 24/10: a freddo (né Claude né musica che suona) un riquadro solo, un pelo più stretto
-                let freddo = model.anteprimaFredda || ((agentSource?.isActive != true) && ((model.home as? MediaSource)?.track?.playing != true))
-                _ = freddo
-                w = 700; h = notch.height + IslandHead.data + 8 + 150 + 8 + IslandBarra.alta     // 28/10: the three Home cards and the tab bar
+                // 28/10: every tab (Home, Claude, Tiles, Work) has the same size, the size of the biggest one, so switching
+                // tabs doesn't move the edges out from under the mouse and close the island
+                let maxRow = sf.width - 80
+                for t in [model.tilesMain, model.tilesWork] where t.maxRowWidth != maxRow { t.maxRowWidth = maxRow }
+                func misura(_ t: TileModel) -> (w: CGFloat, h: CGFloat) {
+                    let visible = t.layout.tiles.filter { x in model.widgets.contains { $0.id == x.id } }
+                    let rows = TileModel.rows(visible, maxWidth: maxRow)
+                    let widths = visible.map { TileModel.tileWidth($0.cells) }
+                    let n = CGFloat(max(1, rows.count))
+                    return (rows.map { TileFlow.width($0, widths, gap: TileMetrics.gap) }.max() ?? 0,
+                            n * TileMetrics.rowH + (n - 1) * TileMetrics.gap + (t.editing ? 32 : 0))
+                }
+                let a = misura(model.tilesMain), b = misura(model.tilesWork)
+                let contenuto = max(150, ClaudeTab.altezza, a.h, b.h)
+                if model.altezzaContenuto != contenuto { model.altezzaContenuto = contenuto }
+                w = min(max(780, max(a.w, b.w) + 40), sf.width - 40)
+                h = notch.height + IslandHead.data + 8 + contenuto + 8 + IslandBarra.alta
             }
         }
         model.width = w
@@ -738,8 +753,10 @@ final class IslandModule {
         shown = show
         if animated {
             NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = model.tiles.editing ? 0.15 : 0.55
-                ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
+                // 28/10: opening keeps its quick-then-settle curve; closing eases out more gently
+                ctx.duration = model.tiles.editing ? 0.15 : show ? IslandTiming.apri : IslandTiming.chiudi
+                ctx.timingFunction = show ? CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
+                                          : CAMediaTimingFunction(controlPoints: 0.4, 0, 0.2, 1)
                 win.animator().setFrame(frame, display: true)
             } completionHandler: { [weak self] in
                 if self?.shown == false { win.orderOut(nil) }
