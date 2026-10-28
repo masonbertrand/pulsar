@@ -9,6 +9,7 @@ testNextEvent()
 testTileFlow()
 testUpdateTiming()
 testProcessUse()
+testClaudeStages()
 
 print("\(checks) checks, \(failures) failed")
 exit(failures == 0 ? 0 : 1)
