@@ -467,10 +467,11 @@ struct IslandPanelContent: View {
                         s.expandedView()
                     } else if model.tab.isTiles {
                         TileRow(tiles: model.tiles, widgets: model.widgets).id(model.tab)
+                            .frame(maxWidth: .infinity, minHeight: model.altezzaContenuto, alignment: .center)
                     } else if model.tab == .claude {
-                        if let st = model.agent { ClaudeTab(store: st, model: model).frame(height: ClaudeTab.altezza) }
+                        if let st = model.agent { ClaudeTab(store: st, model: model).frame(height: model.altezzaContenuto) }
                     } else {
-                        IslandCasa(model: model).frame(height: 150)
+                        IslandCasa(model: model).frame(height: model.altezzaContenuto)
                     }
                 }
                 .id(model.tab)                                   // 28/10: each tab fades in, instead of jumping

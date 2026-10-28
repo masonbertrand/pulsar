@@ -98,6 +98,8 @@ final class IslandModel: ObservableObject {
     // prima restava della misura vecchia per qualche secondo e la Casa copriva le icone in alto.
     /// 24/10: anteprima della Casa a freddo anche mentre Claude lavora (pulsar://isola?freddo=1, freddo=0 la toglie)
     @Published var anteprimaFredda = false { didSet { if anteprimaFredda != oldValue { DispatchQueue.main.async { self.dropChanged?() } } } }
+    /// 28/10: the height every tab's content gets (the tallest of them), set by the island's layout.
+    @Published var altezzaContenuto: CGFloat = 196
     /// Does this source take over the panel with its own view? Claude's alerts don't on the Claude tab,
     /// which shows the same permission and question itself (28/10).
     func avviso(_ s: IslandSource) -> Bool { !s.usesHome && !(tab == .claude && s.id == "agent") }
@@ -719,25 +721,24 @@ final class IslandModule {
                 if let a = s as? AgentIslandSource { w = 680; h = notch.height + 8 + a.height + 10 }
                 else if let ps = s.panelSize { w = ps.width; h = notch.height + 8 + ps.height + 10 }   // 25/10: misurata sul contenuto
                 else { w = 600; h = notch.height + 8 + 150 }
-            } else if model.tab.isTiles {
-                // più bassa della Casa (l'autore, 17/10); il cambio di scheda ridisegna subito, quindi niente più icone coperte
-                // 27/10: as wide as the widest row, never wider than the screen; past that the tiles wrap and it grows taller
-                let maxRow = sf.width - 80
-                if model.tiles.maxRowWidth != maxRow { model.tiles.maxRowWidth = maxRow }
-                let visible = model.tiles.layout.tiles.filter { t in model.widgets.contains { $0.id == t.id } }
-                let rows = TileModel.rows(visible, maxWidth: maxRow)
-                let widths = visible.map { TileModel.tileWidth($0.cells) }
-                let widest = rows.map { TileFlow.width($0, widths, gap: TileMetrics.gap) }.max() ?? 0
-                let n = CGFloat(max(1, rows.count))
-                w = min(max(700, widest + 40), sf.width - 40)
-                h = notch.height + IslandHead.data + 8 + n * TileMetrics.rowH + (n - 1) * TileMetrics.gap + 8 + IslandBarra.alta + (model.tiles.editing ? 32 : 0)
-            } else if model.tab == .claude {
-                w = 780; h = notch.height + IslandHead.data + 8 + ClaudeTab.altezza + 8 + IslandBarra.alta
             } else {
-                // 24/10: a freddo (né Claude né musica che suona) un riquadro solo, un pelo più stretto
-                let freddo = model.anteprimaFredda || ((agentSource?.isActive != true) && ((model.home as? MediaSource)?.track?.playing != true))
-                _ = freddo
-                w = 700; h = notch.height + IslandHead.data + 8 + 150 + 8 + IslandBarra.alta     // 28/10: the three Home cards and the tab bar
+                // 28/10: every tab (Home, Claude, Tiles, Work) has the same size, the size of the biggest one, so switching
+                // tabs doesn't move the edges out from under the mouse and close the island
+                let maxRow = sf.width - 80
+                for t in [model.tilesMain, model.tilesWork] where t.maxRowWidth != maxRow { t.maxRowWidth = maxRow }
+                func misura(_ t: TileModel) -> (w: CGFloat, h: CGFloat) {
+                    let visible = t.layout.tiles.filter { x in model.widgets.contains { $0.id == x.id } }
+                    let rows = TileModel.rows(visible, maxWidth: maxRow)
+                    let widths = visible.map { TileModel.tileWidth($0.cells) }
+                    let n = CGFloat(max(1, rows.count))
+                    return (rows.map { TileFlow.width($0, widths, gap: TileMetrics.gap) }.max() ?? 0,
+                            n * TileMetrics.rowH + (n - 1) * TileMetrics.gap + (t.editing ? 32 : 0))
+                }
+                let a = misura(model.tilesMain), b = misura(model.tilesWork)
+                let contenuto = max(150, ClaudeTab.altezza, a.h, b.h)
+                if model.altezzaContenuto != contenuto { model.altezzaContenuto = contenuto }
+                w = min(max(780, max(a.w, b.w) + 40), sf.width - 40)
+                h = notch.height + IslandHead.data + 8 + contenuto + 8 + IslandBarra.alta
             }
         }
         model.width = w
