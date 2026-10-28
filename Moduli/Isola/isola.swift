@@ -13,6 +13,19 @@ enum IslandMetrics {
 }
 
 /// Una fonte dell'isola: musica, avvisi, finestre, widget. Mai lavoro pesante sul filo principale.
+/// 28/10: how the island feels. The user found it "too quick and unusable": it closed 0.05 s after the mouse left.
+enum IslandTiming {
+    /// The mouse rests on the notch this long before the island opens.
+    static let apertura: TimeInterval = 0.2
+    /// It waits this long after the mouse leaves before closing; coming back in time keeps it open.
+    static let chiusura: TimeInterval = 0.6
+    /// Points around the open island that still count as inside.
+    static let margine: CGFloat = 24
+    /// How long the window takes to open and to close.
+    static let apri: TimeInterval = 0.6
+    static let chiudi: TimeInterval = 0.5
+}
+
 protocol IslandSource: AnyObject {
     var id: String { get }
     var priority: Int { get }
@@ -601,20 +614,21 @@ final class IslandModule {
             if model.dropHover { model.setDropHover(false) }
         }
         var inside = wakeZone.contains(p)
-        if shown, let f = win?.frame, contentFrame(f).insetBy(dx: -6, dy: -6).contains(p) { inside = true }
+        // 28/10: a wider margin, so brushing past the edge doesn't count as leaving (was 6 pt)
+        if shown, let f = win?.frame, contentFrame(f).insetBy(dx: -IslandTiming.margine, dy: -IslandTiming.margine).contains(p) { inside = true }
         if inside {
             hoverWork?.cancel(); hoverWork = nil
             if !hover && dwellWork == nil {
                 let w = DispatchWorkItem { [weak self] in self?.dwellWork = nil; self?.hover = true; self?.layout(animated: true) }
                 dwellWork = w
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: w)
+                DispatchQueue.main.asyncAfter(deadline: .now() + IslandTiming.apertura, execute: w)
             }
         } else {
             dwellWork?.cancel(); dwellWork = nil
             if hover && hoverWork == nil {
                 let w = DispatchWorkItem { [weak self] in self?.hover = false; self?.hoverWork = nil; self?.layout(animated: true) }
                 hoverWork = w
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: w)
+                DispatchQueue.main.asyncAfter(deadline: .now() + IslandTiming.chiusura, execute: w)   // 28/10: was 0.05 s
             }
         }
     }
@@ -738,8 +752,10 @@ final class IslandModule {
         shown = show
         if animated {
             NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = model.tiles.editing ? 0.15 : 0.55
-                ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
+                // 28/10: opening keeps its quick-then-settle curve; closing eases out more gently
+                ctx.duration = model.tiles.editing ? 0.15 : show ? IslandTiming.apri : IslandTiming.chiudi
+                ctx.timingFunction = show ? CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
+                                          : CAMediaTimingFunction(controlPoints: 0.4, 0, 0.2, 1)
                 win.animator().setFrame(frame, display: true)
             } completionHandler: { [weak self] in
                 if self?.shown == false { win.orderOut(nil) }

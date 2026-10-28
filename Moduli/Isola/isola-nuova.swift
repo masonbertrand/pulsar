@@ -225,7 +225,7 @@ struct IslandBarra: View {
 
     private func scheda(_ t: IslandTab, _ simbolo: String, _ pieno: String, _ nome: String, avviso: Bool = false) -> some View {
         let on = model.tab == t
-        return Button { model.tab = t } label: {
+        return Button { withAnimation(.easeInOut(duration: 0.28)) { model.tab = t } } label: {
             HStack(spacing: 6) {
                 Image(systemName: on ? pieno : simbolo).font(.system(size: 12, weight: .medium))
                 if on { Text(nome).font(.system(size: 12.5, weight: .medium)) }
@@ -473,6 +473,9 @@ struct IslandPanelContent: View {
                         IslandCasa(model: model).frame(height: 150)
                     }
                 }
+                .id(model.tab)                                   // 28/10: each tab fades in, instead of jumping
+                .transition(.opacity.combined(with: .scale(scale: 0.985, anchor: .top)))
+                .animation(.easeInOut(duration: 0.28), value: model.tab)
                 .padding(.horizontal, 20).padding(.bottom, avviso ? 10 : 8)
                 .frame(maxHeight: .infinity, alignment: .top)
                 .clipped()                                       // mai più alto del pannello: la testa resta al suo posto
