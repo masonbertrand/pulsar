@@ -132,8 +132,8 @@ enum IslandTab {
 struct IslandHead: View {
     @ObservedObject var model: IslandModel
     @ObservedObject var tiles: TileModel
-    var status: String
-    init(model: IslandModel, status: String) { self.model = model; self.tiles = model.tiles; self.status = status }
+    var status: String?
+    init(model: IslandModel, status: String?) { self.model = model; self.tiles = model.tiles; self.status = status }
 
     var body: some View {
         let half = max(0, (model.width - model.notchWidth) / 2 - 30)
@@ -163,7 +163,11 @@ struct IslandHead: View {
                     icon("folder", T("File", "Files")) { IslandActions.files() }
                     icon("note.text", T("Note", "Notes")) { IslandActions.notes() }
                 } else {
-                    Text(status).font(.system(size: 11.5)).foregroundStyle(Volta.t3).lineLimit(1).padding(.trailing, 4)
+                    if let status {
+                        Text(status).font(.system(size: 11.5)).foregroundStyle(Volta.t3).lineLimit(1).padding(.trailing, 4)
+                    } else {
+                        DataOra().padding(.trailing, 4)          // 28/10: date and time when there's nothing else to say
+                    }
                 }
             }
             .frame(width: half)
@@ -192,13 +196,7 @@ struct IslandHead: View {
 struct IslandCasa: View {
     @ObservedObject var model: IslandModel
     var body: some View {
-        if model.anteprimaFredda {
-            WelcomeCard(store: model.agent, volo: true, media: model.home as? MediaSource)   // anteprima: sempre il riquadro unico
-        } else if let st = model.agent, !st.active.isEmpty {
-            ClaudeCasa(store: st)
-        } else {
-            CasaFredda(model: model)
-        }
+        CasaSchede(model: model)        // 28/10: three colour cards, Claude Code, Music, Focus (casa-schede.swift)
     }
 }
 
@@ -404,7 +402,7 @@ struct IslandPanelContent: View {
                     } else if model.tab.isTiles {
                         TileRow(tiles: model.tiles, widgets: model.widgets).id(model.tab)
                     } else {
-                        IslandCasa(model: model).frame(height: 128)
+                        IslandCasa(model: model).frame(height: 150)
                     }
                 }
                 .padding(.horizontal, 20).padding(.bottom, 10)
@@ -417,15 +415,15 @@ struct IslandPanelContent: View {
         .clipped()          // niente può allargare il pannello oltre la sua misura
     }
 
-    private var status: String {
-        guard let st = model.agent else { return Saluto.ciao(Persona.nome, inglese: !pulsarItalian) }
+    private var status: String? {
+        guard let st = model.agent else { return nil }
         if st.question != nil { return T("Claude ti chiede", "Claude asks") }
         if st.hasPending { return T("aspetta il tuo ok", "waiting for your OK") }
         if let s = st.current, s.status == "done", Date().timeIntervalSince1970 - s.finished < 15 {
             return T("fatto in \(AgentLook.duration(s))", "done in \(AgentLook.duration(s))")
         }
         let n = st.active.count
-        return n > 0 ? T("\(n) in corso", "\(n) running") : Saluto.ciao(Persona.nome, inglese: !pulsarItalian)
+        return n > 0 ? T("\(n) in corso", "\(n) running") : nil
     }
 }
 

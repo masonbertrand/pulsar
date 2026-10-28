@@ -708,7 +708,8 @@ final class IslandModule {
             } else {
                 // 24/10: a freddo (né Claude né musica che suona) un riquadro solo, un pelo più stretto
                 let freddo = model.anteprimaFredda || ((agentSource?.isActive != true) && ((model.home as? MediaSource)?.track?.playing != true))
-                w = freddo ? 580 : 700; h = notch.height + 8 + 128 + 10
+                _ = freddo
+                w = 700; h = notch.height + 8 + 150 + 10        // 28/10: the three Home cards (casa-schede.swift)
             }
         }
         model.width = w
