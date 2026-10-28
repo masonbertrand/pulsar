@@ -13,7 +13,7 @@ struct ClaudeTab: View {
     @ObservedObject var model: IslandModel
     @State private var messaggio = ""
 
-    static let altezza: CGFloat = 196
+    static let altezza: CGFloat = 170
     static let rame = Color(red: 0.85, green: 0.47, blue: 0.27)      // Claude's orange
 
     var body: some View {
@@ -62,7 +62,7 @@ struct ClaudeTab: View {
             .padding(.bottom, 4)
             TimelineView(.periodic(from: .now, by: 1)) { ctx in
                 let fine = finita && s.finished > 0 ? s.finished : ctx.date.timeIntervalSince1970
-                Text(ClaudeFasi.tempo(fine - s.started)).font(.system(size: 50, weight: .bold).monospacedDigit())
+                Text(ClaudeFasi.tempo(fine - s.started)).font(.system(size: 42, weight: .bold).monospacedDigit())
                     .foregroundStyle(Volta.t1).lineLimit(1).minimumScaleFactor(0.6)
             }
             Text(riga(s, fase: fase, finita: finita)).font(.system(size: 13)).foregroundStyle(Volta.t2).lineLimit(1)

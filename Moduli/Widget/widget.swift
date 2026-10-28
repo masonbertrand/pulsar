@@ -12,6 +12,20 @@ enum TileMetrics {
     static let radius: CGFloat = 20
 }
 
+/// 28/10: the small round button in a tile's corner.
+struct TileCornerButton: View {
+    let symbol: String
+    let hint: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 9.5, weight: .semibold)).foregroundStyle(Color.primary.opacity(0.65))
+                .frame(width: 20, height: 20).background(Circle().fill(Color.primary.opacity(0.09))).contentShape(Circle())
+        }
+        .buttonStyle(.plain).hint(hint).offset(x: 4, y: -4)
+    }
+}
+
 /// 27/10: every tile does something when clicked. Buttons inside a tile still win over this.
 enum TileOpen {
     static func app(_ name: String) { NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/\(name).app")) }
@@ -19,6 +33,11 @@ enum TileOpen {
 }
 
 extension View {
+    /// 28/10: a small round button in the tile's top-right corner, for its main action.
+    func tileAction(_ symbol: String, _ hint: String, _ action: @escaping () -> Void) -> some View {
+        overlay(alignment: .topTrailing) { TileCornerButton(symbol: symbol, hint: hint, action: action) }
+    }
+
     /// The whole tile is clickable, and says what a click does when you hover it.
     func tileTap(_ hint: String, _ action: @escaping () -> Void) -> some View {
         frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle()).onTapGesture(perform: action).hint(hint)
@@ -248,7 +267,7 @@ private struct MusicTile: View {
             let playing = live && t.playing
             if cells == 1 {
                 VStack(spacing: 6) {
-                    record(t, side: 40, playing: playing)
+                    record(t, side: 40, playing: playing).onTapGesture { apriLettore(t) }.hint(T("Apri \(t.app)", "Open \(t.app)"))
                     button(playing ? "pause.fill" : "play.fill", 13) { live ? media.command(.playPause) : media.resumeLast() }
                 }
                 .frame(maxWidth: .infinity)
@@ -257,13 +276,22 @@ private struct MusicTile: View {
                 // testo e tre tasti non ci stavano: qui copertina più piccola senza disco, titolo, artista, play e avanti.
                 HStack(spacing: 10) {
                     art(56).shadow(color: .black.opacity(0.3), radius: 3, x: 1)
+                        .onTapGesture { apriLettore(t) }.hint(T("Apri \(t.app)", "Open \(t.app)"))
                     VStack(alignment: .leading, spacing: 1) {
                         Text(t.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
                         Text(t.artist).font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.62)).lineLimit(1)
                         Spacer(minLength: 2)
-                        HStack(spacing: 10) {
+                        // 28/10: previous too, and the full-screen player
+                        HStack(spacing: 8) {
+                            button("backward.fill", 11) { media.command(.previous) }.opacity(live ? 1 : 0.35).disabled(!live)
                             button(playing ? "pause.fill" : "play.fill", 13) { live ? media.command(.playPause) : media.resumeLast() }
                             button("forward.fill", 11) { media.command(.next) }.opacity(live ? 1 : 0.35).disabled(!live)
+                            Spacer(minLength: 0)
+                            Button { FullPlayer.shared.toggle(media: media) } label: {
+                                Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 9, weight: .semibold))
+                                    .foregroundStyle(Color.primary.opacity(0.55)).frame(width: 18, height: 18).contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain).hint(T("Lettore a tutto schermo", "Full screen player"))
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -273,7 +301,7 @@ private struct MusicTile: View {
             } else {
                 let side: CGFloat = 76                                  // tutta l'altezza utile della tessera (96 - 2 x 10)
                 HStack(spacing: 10) {
-                    record(t, side: side, playing: playing)
+                    record(t, side: side, playing: playing).onTapGesture { apriLettore(t) }.hint(T("Apri \(t.app)", "Open \(t.app)"))
                     VStack(alignment: .leading, spacing: 1) {
                         Text(t.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
                         Text(t.artist).font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.62)).lineLimit(1)
@@ -342,6 +370,14 @@ private struct MusicTile: View {
         }
         .frame(width: side, height: side)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    /// 28/10: the cover opens the app that's playing.
+    private func apriLettore(_ t: Track) {
+        let id = t.app == "Music" ? "com.apple.Music" : "com.spotify.client"
+        if let u = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
+            NSWorkspace.shared.openApplication(at: u, configuration: NSWorkspace.OpenConfiguration())
+        }
     }
 
     private func button(_ symbol: String, _ size: CGFloat, _ action: @escaping () -> Void) -> some View {
@@ -476,7 +512,8 @@ struct WeatherWidget: IslandWidget {
     func body(cells: Int) -> AnyView {
         AnyView(WeatherTile(model: .shared, cells: cells).tileTap(T("Apri Meteo", "Open Weather")) {
             if WeatherModel.shared.city.isEmpty { WeatherModel.shared.askCity() } else { TileOpen.app("Weather") }
-        })
+        }
+        .tileAction("mappin.and.ellipse", T("Cambia città", "Change city")) { WeatherModel.shared.askCity() })
     }
 }
 
@@ -624,7 +661,26 @@ struct CalendarWidget: IslandWidget {
     let id = "calendar"
     var title: String { T("Evento", "Event") }
     let symbol = "calendar"
-    func body(cells: Int) -> AnyView { AnyView(CalendarTile(model: .shared, cells: cells).tileTap(T("Apri Calendario", "Open Calendar")) { TileOpen.app("Calendar") }) }
+    func body(cells: Int) -> AnyView {
+        AnyView(CalendarTile(model: .shared, cells: cells).tileTap(T("Apri Calendario", "Open Calendar")) { TileOpen.app("Calendar") }
+            .overlay(alignment: .topTrailing) { AzioneEvento(model: .shared) })
+    }
+}
+
+/// 28/10: Join when the next event has a meeting link, otherwise a new event in Calendar.
+private struct AzioneEvento: View {
+    @ObservedObject var model: CalendarModel
+    var body: some View {
+        if let link = model.next?.link {
+            Button { NSWorkspace.shared.open(link) } label: {
+                Text(T("Entra", "Join")).font(.system(size: 10, weight: .semibold)).foregroundStyle(.white)
+                    .padding(.horizontal, 9).frame(height: 20).background(Capsule().fill(Volta.a2)).contentShape(Capsule())
+            }
+            .buttonStyle(.plain).hint(T("Entra nella riunione", "Join the meeting")).offset(x: 4, y: -4)
+        } else {
+            TileCornerButton(symbol: "plus", hint: T("Nuovo evento", "New event")) { TileOpen.app("Calendar") }
+        }
+    }
 }
 
 private struct CalendarTile: View {

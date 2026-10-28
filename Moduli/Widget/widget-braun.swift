@@ -19,7 +19,10 @@ struct ClockWidget: IslandWidget {
     let id = "clock"
     var title: String { T("Orologio", "Clock") }
     let symbol = "clock"
-    func body(cells: Int) -> AnyView { AnyView(ClockTile(cells: cells).tileTap(T("Apri Orologio", "Open Clock")) { TileOpen.app("Clock") }) }
+    func body(cells: Int) -> AnyView {
+        AnyView(ClockTile(cells: cells).tileTap(T("Apri Orologio", "Open Clock")) { TileOpen.app("Clock") }
+            .tileAction("alarm", T("Sveglie", "Alarms")) { TileOpen.app("Clock") })
+    }
 }
 
 private struct ClockTile: View {
@@ -94,7 +97,10 @@ struct MonthWidget: IslandWidget {
     let id = "month"
     var title: String { T("Mese", "Month") }
     let symbol = "circle.grid.3x3"
-    func body(cells: Int) -> AnyView { AnyView(MonthTile(cells: cells).tileTap(T("Apri Calendario", "Open Calendar")) { TileOpen.app("Calendar") }) }
+    func body(cells: Int) -> AnyView {
+        AnyView(MonthTile(cells: cells).tileTap(T("Apri Calendario", "Open Calendar")) { TileOpen.app("Calendar") }
+            .tileAction("plus", T("Nuovo evento", "New event")) { TileOpen.app("Calendar") })
+    }
 }
 
 private struct MonthTile: View {
