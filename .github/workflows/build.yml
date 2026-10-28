@@ -5,7 +5,7 @@ name: Build Pulsar
 # Other branches only build and test, so work in progress never reaches the app.
 #
 # 28/10: GitHub's Mac runners are sometimes all busy, and a job waits until it gives up ("not acquired").
-# So the same build runs on three kinds of Mac at once, and the first one that works is published.
+# So the same build runs on two kinds of Mac at once (Apple silicon and Intel), and the first one that works is published.
 # Each builds the Apple-silicon app for macOS 26 (PULSAR_TARGET), whatever the runner's own macOS or chip.
 #
 # Secrets (Settings > Secrets and variables > Actions):
@@ -36,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [macos-26, macos-15, macos-26-intel]
+        runner: [macos-26, macos-26-intel]   # macos-15 dropped 28/10: its Xcode 26.3 times out on several of the author's expressions
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     env:
@@ -142,7 +142,7 @@ jobs:
         run: |
           find art -type f | sort
           f=""
-          for r in macos-26 macos-15 macos-26-intel; do
+          for r in macos-26 macos-26-intel; do
             f=$(find art -path "*Pulsar-$r/*" -name Pulsar.zip | head -1); [ -n "$f" ] && break
           done
           [ -z "$f" ] && f=$(find art -name Pulsar.zip | head -1)
