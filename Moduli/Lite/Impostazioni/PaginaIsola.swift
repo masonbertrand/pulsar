@@ -28,6 +28,10 @@ struct PaginaIsola: View {
                 PaginaRileggi { PaginaCornice(titolo: PaginaImpostazioni.isola.titolo) {
                     GruppoAcceso(valore: { Self.acceso }) { Self.i?.enabled = $0 }
                     Group {
+                        GruppoImpostazioni(T("Apertura", "Opening")) {
+                            RigaInterruttore(T("Apri quando il mouse si ferma sul notch", "Open when the mouse rests on the notch"),
+                                             valore: { IslandModule.apriPassando }) { IslandModule.apriPassando = $0 }
+                        }
                         GruppoImpostazioni(T("Nell'isola", "In the island")) {
                             RigaInterruttore(T("YouTube nell'isola", "YouTube in the island"), valore: { BrowserMediaSource.enabled }) { BrowserMediaSource.enabled = $0 }
                             RigaInterruttore(T("Testi dalla rete (LRCLIB)", "Lyrics from the web (LRCLIB)"), valore: { MediaSource.lyricsEnabled }) { MediaSource.lyricsEnabled = $0 }

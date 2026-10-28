@@ -73,6 +73,7 @@ enum Chiave: String, CaseIterable {
     case isolaTiles
     case isolaTilesLavoro   // 27/10: the Work tab's tiles (the tab became Communications on 28/10)
     case notionPagine       // 28/10: pages pinned to the Notion tab, as JSON
+    case isolaApriPassando  // 28/10: the island opens when the mouse rests on the notch (on by default); off = click only
     case isolaTray
     case isolaUltimoBrano
     case isolaWAChat

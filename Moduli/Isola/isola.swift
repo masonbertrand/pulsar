@@ -15,8 +15,9 @@ enum IslandMetrics {
 /// Una fonte dell'isola: musica, avvisi, finestre, widget. Mai lavoro pesante sul filo principale.
 /// 28/10: how the island feels. The user found it "too quick and unusable": it closed 0.05 s after the mouse left.
 enum IslandTiming {
-    /// The mouse rests on the notch this long before the island opens.
-    static let apertura: TimeInterval = 0.2
+    /// The mouse rests on the notch this long before the island opens. 28/10: was 0.2 s, and passing on the way to a
+    /// browser tab or a menu kept opening it.
+    static let apertura: TimeInterval = 0.5
     /// It waits this long after the mouse leaves before closing; coming back in time keeps it open.
     static let chiusura: TimeInterval = 0.6
     /// Points around the open island that still count as inside.
@@ -379,6 +380,11 @@ final class IslandModule {
     private var forced: IslandState?
     private var hover = false
     private var pinnedOpen = false
+    /// 28/10: Settings → Island → "Open when the mouse rests on the notch". Off: only a click opens it.
+    static var apriPassando: Bool {
+        get { Impostazioni.object(.isolaApriPassando) as? Bool ?? true }
+        set { Impostazioni.set(newValue, .isolaApriPassando) }
+    }
     private var hoverWork: DispatchWorkItem?
     private var monitors: [Any] = []
     private var shown = false
@@ -507,9 +513,16 @@ final class IslandModule {
         if let g = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: move) { monitors.append(g) }
         if let l = NSEvent.addLocalMonitorForEvents(matching: .mouseMoved, handler: { move($0); return $0 }) { monitors.append(l) }
         // un clic fuori chiude l'isola aperta con un clic
-        let fuori: (NSEvent) -> Void = { [weak self] _ in
+        let fuori: (NSEvent) -> Void = { [weak self] e in
             self?.dragBase = NSPasteboard(name: .drag).changeCount     // 17/10: per riconoscere un file trascinato dopo
-            DispatchQueue.main.async { self?.clickOutside() }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                // 28/10: a click on the notch opens it (the only way when opening on hover is off)
+                if e.type == .leftMouseDown, !self.hover, self.wakeZone.contains(NSEvent.mouseLocation) {
+                    self.hover = true; self.layout(animated: true); return
+                }
+                self.clickOutside()
+            }
         }
         if let g = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] _ in
             DispatchQueue.main.async { if self?.model.dropHover == true { self?.model.setDropHover(false) } }
@@ -577,7 +590,8 @@ final class IslandModule {
     /// La fascia sensibile: il notch e un po' di margine, fino al bordo alto dello schermo.
     private var wakeZone: NSRect {
         let sf = screen.frame, n = notchSize
-        let w = n.width + 60
+        // 28/10: only the notch itself (it reached 30 pt beyond each side, where tabs and menus are)
+        let w = n.width
         return NSRect(x: sf.midX - w / 2, y: sf.maxY - n.height - 2, width: w, height: n.height + 6)
     }
 
@@ -620,7 +634,8 @@ final class IslandModule {
         if shown, let f = win?.frame, contentFrame(f).insetBy(dx: -IslandTiming.margine, dy: -IslandTiming.margine).contains(p) { inside = true }
         if inside {
             hoverWork?.cancel(); hoverWork = nil
-            if !hover && dwellWork == nil {
+            // 28/10: not while a button is held (dragging a tab or a window), and only if opening on hover is on
+            if !hover && dwellWork == nil && NSEvent.pressedMouseButtons == 0 && Self.apriPassando {
                 let w = DispatchWorkItem { [weak self] in self?.dwellWork = nil; self?.hover = true; self?.layout(animated: true) }
                 dwellWork = w
                 DispatchQueue.main.asyncAfter(deadline: .now() + IslandTiming.apertura, execute: w)
