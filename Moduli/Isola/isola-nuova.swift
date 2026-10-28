@@ -135,11 +135,17 @@ struct IslandHead: View {
     var status: String?
     init(model: IslandModel, status: String?) { self.model = model; self.status = status }
 
+    /// 28/10: the centred row under the notch with the date and time.
+    static let data: CGFloat = 18
+
     var body: some View {
         let half = max(0, (model.width - model.notchWidth) / 2 - 30)
         HStack(spacing: 0) {
             HStack(spacing: 2) {
-                DataOra().padding(.leading, 4)
+                if model.tab == .claude {
+                    (Text("Claude ").foregroundStyle(Volta.t1) + Text("Code").foregroundStyle(ClaudeTab.rame))
+                        .font(.system(size: 13, weight: .semibold)).padding(.leading, 4)
+                }
                 Spacer(minLength: 0)
             }
             .frame(width: half)
@@ -192,12 +198,21 @@ struct IslandBarra: View {
     static let alta: CGFloat = 38          // 30 of bar + 8 below it
 
     var body: some View {
-        HStack(spacing: 4) {
-            scheda(.casa, "house", "house.fill", T("Casa", "Home"))
-            scheda(.claude, "asterisk", "asterisk", "Claude", avviso: model.agent?.hasPending == true || model.agent?.question != nil)
-            scheda(.tessere, "square.grid.2x2", "square.grid.2x2.fill", T("Tessere", "Tiles"))
-            scheda(.lavoro, "briefcase", "briefcase.fill", T("Lavoro", "Work"))
-            Spacer(minLength: 0)
+        ZStack {
+            // 28/10: the tabs in the middle, like the reference
+            HStack(spacing: 4) {
+                scheda(.casa, "house", "house.fill", T("Casa", "Home"))
+                scheda(.claude, "asterisk", "asterisk", "Claude", avviso: model.agent?.hasPending == true || model.agent?.question != nil)
+                scheda(.tessere, "square.grid.2x2", "square.grid.2x2.fill", T("Tessere", "Tiles"))
+                scheda(.lavoro, "briefcase", "briefcase.fill", T("Lavoro", "Work"))
+            }
+            HStack(spacing: 4) { Spacer(minLength: 0); destra }
+        }
+        .padding(.horizontal, 20)
+        .frame(height: 30)
+    }
+
+    @ViewBuilder private var destra: some View {
             if model.tab.isTiles {
                 tasto(tiles.editing ? "checkmark" : "plus", tiles.editing ? T("Fatto", "Done") : T("Personalizza", "Customize"), on: tiles.editing) {
                     tiles.editing.toggle()
@@ -206,9 +221,6 @@ struct IslandBarra: View {
             if let d = model.dial, d.enabled, let it = d.soundItem {
                 tasto("speaker.wave.2", T("Volume", "Volume")) { EdgeDock.shared.reveal(it, hideAfter: 4) }
             }
-        }
-        .padding(.horizontal, 20)
-        .frame(height: 30)
     }
 
     private func scheda(_ t: IslandTab, _ simbolo: String, _ pieno: String, _ nome: String, avviso: Bool = false) -> some View {
@@ -218,9 +230,9 @@ struct IslandBarra: View {
                 Image(systemName: on ? pieno : simbolo).font(.system(size: 12, weight: .medium))
                 if on { Text(nome).font(.system(size: 12.5, weight: .medium)) }
             }
-            .foregroundStyle(on ? Volta.t1 : Volta.t3)
+            .foregroundStyle(on ? (t == .claude ? ClaudeTab.rame : Volta.t1) : Volta.t3)
             .padding(.horizontal, on ? 12 : 9).frame(height: 28)
-            .background(Capsule().fill(on ? Volta.pill : .clear))
+            .background(Capsule().fill(on ? (t == .claude ? ClaudeTab.rame.opacity(0.22) : Volta.pill) : .clear))
             .overlay(alignment: .topTrailing) {
                 if avviso { Circle().fill(Night.amber).frame(width: 7, height: 7).offset(x: -3, y: 3) }   // Claude is waiting for you
             }
@@ -447,8 +459,9 @@ struct IslandPanelContent: View {
                 }
             } else {
                 IslandHead(model: model, status: status)          // nella fascia ai lati del notch
+                let avviso = model.source.map(model.avviso) ?? false
+                if !avviso { DataOra().frame(height: IslandHead.data) }      // 28/10: centred, under the notch
                 Spacer().frame(height: 8)
-                let avviso = model.source.map { !$0.usesHome } ?? false
                 Group {
                     if avviso, let s = model.source {
                         s.expandedView()

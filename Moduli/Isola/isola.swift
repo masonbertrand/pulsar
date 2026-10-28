@@ -85,6 +85,9 @@ final class IslandModel: ObservableObject {
     // prima restava della misura vecchia per qualche secondo e la Casa copriva le icone in alto.
     /// 24/10: anteprima della Casa a freddo anche mentre Claude lavora (pulsar://isola?freddo=1, freddo=0 la toglie)
     @Published var anteprimaFredda = false { didSet { if anteprimaFredda != oldValue { DispatchQueue.main.async { self.dropChanged?() } } } }
+    /// Does this source take over the panel with its own view? Claude's alerts don't on the Claude tab,
+    /// which shows the same permission and question itself (28/10).
+    func avviso(_ s: IslandSource) -> Bool { !s.usesHome && !(tab == .claude && s.id == "agent") }
     /// 28/10: true while a message to Claude is being typed: the island stays open even if the mouse wanders off.
     @Published var trattiene = false { didSet { if trattiene != oldValue { DispatchQueue.main.async { self.dropChanged?() } } } }
     @Published var tab: IslandTab = .casa {
@@ -205,6 +208,12 @@ struct IslandView: View {
             } else {
                 // 17/10: collo nel notch, pannello sotto la barra dei menu; ai lati del collo la barra resta libera
                 IslandShellFill(neckWidth: model.notchWidth, neckHeight: model.notchHeight)
+                    .overlay {
+                        // 28/10: on the Claude tab the island glows copper while Claude works, green when it's done
+                        if model.tab == .claude, !(model.source.map(model.avviso) ?? false), let st = model.agent {
+                            ClaudeGlow(store: st).clipShape(NotchShape(shoulder: 10, bottom: 28))
+                        }
+                    }
             }
         }
         .contentShape(Rectangle())
@@ -692,7 +701,7 @@ final class IslandModule {
             // 17/10 sera: pannello attaccato al bordo alto, testa nella fascia del notch: notch + 8 + tessera + 10
             if scrive { w = 600; h = notch.height + 8 + EmailCard.altezza + 10 }
             else if dropping { w = 600; h = notch.height + 8 + (MutaCentro.shared.mostraTessere && model.dropNote == nil ? MutaZona.altezza : 132) + 10 }
-            else if let s = src, !s.usesHome {
+            else if let s = src, model.avviso(s) {
                 if let a = s as? AgentIslandSource { w = 680; h = notch.height + 8 + a.height + 10 }
                 else if let ps = s.panelSize { w = ps.width; h = notch.height + 8 + ps.height + 10 }   // 25/10: misurata sul contenuto
                 else { w = 600; h = notch.height + 8 + 150 }
@@ -707,14 +716,14 @@ final class IslandModule {
                 let widest = rows.map { TileFlow.width($0, widths, gap: TileMetrics.gap) }.max() ?? 0
                 let n = CGFloat(max(1, rows.count))
                 w = min(max(700, widest + 40), sf.width - 40)
-                h = notch.height + 8 + n * TileMetrics.rowH + (n - 1) * TileMetrics.gap + 8 + IslandBarra.alta + (model.tiles.editing ? 32 : 0)
+                h = notch.height + IslandHead.data + 8 + n * TileMetrics.rowH + (n - 1) * TileMetrics.gap + 8 + IslandBarra.alta + (model.tiles.editing ? 32 : 0)
             } else if model.tab == .claude {
-                w = 760; h = notch.height + 8 + ClaudeTab.altezza + 8 + IslandBarra.alta
+                w = 780; h = notch.height + IslandHead.data + 8 + ClaudeTab.altezza + 8 + IslandBarra.alta
             } else {
                 // 24/10: a freddo (né Claude né musica che suona) un riquadro solo, un pelo più stretto
                 let freddo = model.anteprimaFredda || ((agentSource?.isActive != true) && ((model.home as? MediaSource)?.track?.playing != true))
                 _ = freddo
-                w = 700; h = notch.height + 8 + 150 + 8 + IslandBarra.alta     // 28/10: the three Home cards and the tab bar
+                w = 700; h = notch.height + IslandHead.data + 8 + 150 + 8 + IslandBarra.alta     // 28/10: the three Home cards and the tab bar
             }
         }
         model.width = w
