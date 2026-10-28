@@ -136,7 +136,7 @@ struct IslandHead: View {
     init(model: IslandModel, status: String?) { self.model = model; self.status = status }
 
     /// 28/10: the centred row under the notch with the date and time.
-    static let data: CGFloat = 18
+    static let data: CGFloat = 16
 
     var body: some View {
         let half = max(0, (model.width - model.notchWidth) / 2 - 30)
@@ -195,7 +195,7 @@ struct IslandBarra: View {
     @ObservedObject var tiles: TileModel
     init(model: IslandModel) { self.model = model; self.tiles = model.tiles }
 
-    static let alta: CGFloat = 38          // 30 of bar + 8 below it
+    static let alta: CGFloat = 34          // 28 of bar + 6 below it
 
     var body: some View {
         ZStack {
@@ -209,7 +209,7 @@ struct IslandBarra: View {
             HStack(spacing: 4) { Spacer(minLength: 0); destra }
         }
         .padding(.horizontal, 20)
-        .frame(height: 30)
+        .frame(height: 28)
     }
 
     @ViewBuilder private var destra: some View {
@@ -466,8 +466,13 @@ struct IslandPanelContent: View {
                     if avviso, let s = model.source {
                         s.expandedView()
                     } else if model.tab.isTiles {
-                        TileRow(tiles: model.tiles, widgets: model.widgets).id(model.tab)
-                            .frame(maxWidth: .infinity, minHeight: model.altezzaContenuto, alignment: .center)
+                        // 28/10: the island keeps one height; more rows of tiles scroll up and down inside it
+                        ScrollView(.vertical, showsIndicators: false) {
+                            TileRow(tiles: model.tiles, widgets: model.widgets).padding(.vertical, 6)
+                                .frame(maxWidth: .infinity, minHeight: model.altezzaContenuto, alignment: .center)
+                        }
+                        .id(model.tab)
+                        .frame(height: model.altezzaContenuto)
                     } else if model.tab == .claude {
                         if let st = model.agent { ClaudeTab(store: st, model: model).frame(height: model.altezzaContenuto) }
                     } else {
@@ -480,7 +485,7 @@ struct IslandPanelContent: View {
                 .padding(.horizontal, 20).padding(.bottom, avviso ? 10 : 8)
                 .frame(maxHeight: .infinity, alignment: .top)
                 .clipped()                                       // mai più alto del pannello: la testa resta al suo posto
-                if !avviso { IslandBarra(model: model).padding(.bottom, 8) }     // 28/10: the tabs, at the bottom
+                if !avviso { IslandBarra(model: model).padding(.bottom, 6) }     // 28/10: the tabs, at the bottom
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

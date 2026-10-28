@@ -726,18 +726,15 @@ final class IslandModule {
                 // tabs doesn't move the edges out from under the mouse and close the island
                 let maxRow = sf.width - 80
                 for t in [model.tilesMain, model.tilesWork] where t.maxRowWidth != maxRow { t.maxRowWidth = maxRow }
-                func misura(_ t: TileModel) -> (w: CGFloat, h: CGFloat) {
+                func larghezza(_ t: TileModel) -> CGFloat {
                     let visible = t.layout.tiles.filter { x in model.widgets.contains { $0.id == x.id } }
-                    let rows = TileModel.rows(visible, maxWidth: maxRow)
                     let widths = visible.map { TileModel.tileWidth($0.cells) }
-                    let n = CGFloat(max(1, rows.count))
-                    return (rows.map { TileFlow.width($0, widths, gap: TileMetrics.gap) }.max() ?? 0,
-                            n * TileMetrics.rowH + (n - 1) * TileMetrics.gap + (t.editing ? 32 : 0))
+                    return TileModel.rows(visible, maxWidth: maxRow).map { TileFlow.width($0, widths, gap: TileMetrics.gap) }.max() ?? 0
                 }
-                let a = misura(model.tilesMain), b = misura(model.tilesWork)
-                let contenuto = max(150, ClaudeTab.altezza, a.h, b.h)
+                // 28/10: one height for all, the Claude tab's; extra rows of tiles scroll inside it. Customizing adds the chip strip.
+                let contenuto = ClaudeTab.altezza + (model.tiles.editing ? 32 : 0)
                 if model.altezzaContenuto != contenuto { model.altezzaContenuto = contenuto }
-                w = min(max(780, max(a.w, b.w) + 40), sf.width - 40)
+                w = min(max(740, max(larghezza(model.tilesMain), larghezza(model.tilesWork)) + 40), sf.width - 40)
                 h = notch.height + IslandHead.data + 8 + contenuto + 8 + IslandBarra.alta
             }
         }

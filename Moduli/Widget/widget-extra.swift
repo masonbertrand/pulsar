@@ -327,7 +327,9 @@ struct TrayWidget: IslandWidget {
     let id = "tray"
     var title: String { T("Vassoio", "Tray") }
     let symbol = "tray"
-    func body(cells: Int) -> AnyView { AnyView(TrayTile(tray: .shared, cells: cells)) }
+    func body(cells: Int) -> AnyView {
+        AnyView(TrayTile(tray: .shared, cells: cells).tileAction("plus", T("Aggiungi file", "Add files")) { TrayModel.shared.scegli() })
+    }
 }
 
 private struct TrayTile: View {
@@ -341,7 +343,7 @@ private struct TrayTile: View {
                 if cells > 1 { Text(T("Trascina qui i file", "Drop files here")).font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.55)) }
             }
             // 27/10: or click to pick them
-            .tileTap(T("Scegli i file da tenere qui", "Choose files to keep here")) { scegli() }
+            .tileTap(T("Scegli i file da tenere qui", "Choose files to keep here")) { tray.scegli() }
         } else {
             HStack(spacing: 8) {
                 ForEach(tray.files.suffix(max(1, cells * 2 - 1)), id: \.self) { u in TrayFile(url: u, tray: tray) }
@@ -351,11 +353,15 @@ private struct TrayTile: View {
         }
     }
 
-    private func scegli() {
+}
+
+extension TrayModel {
+    /// 28/10: pick files to keep on the shelf.
+    func scegli() {
         NSApp.activate(ignoringOtherApps: true)
         let p = NSOpenPanel()
         p.allowsMultipleSelection = true; p.canChooseDirectories = true
-        if p.runModal() == .OK { tray.add(p.urls) }
+        if p.runModal() == .OK { add(p.urls) }
     }
 }
 
@@ -473,7 +479,8 @@ struct MacWidget: IslandWidget {
     func body(cells: Int) -> AnyView {
         AnyView(MacTile(st: .shared, cells: cells).tileTap(T("Impostazioni Batteria", "Battery settings")) {
             TileOpen.url("x-apple.systempreferences:com.apple.Battery-Settings.extension")
-        })
+        }
+        .tileAction("gauge.with.dots.needle.50percent", T("Monitoraggio Attività", "Activity Monitor")) { TileOpen.app("Utilities/Activity Monitor") })
     }
 }
 
