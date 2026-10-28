@@ -85,6 +85,8 @@ final class IslandModel: ObservableObject {
     // prima restava della misura vecchia per qualche secondo e la Casa copriva le icone in alto.
     /// 24/10: anteprima della Casa a freddo anche mentre Claude lavora (pulsar://isola?freddo=1, freddo=0 la toglie)
     @Published var anteprimaFredda = false { didSet { if anteprimaFredda != oldValue { DispatchQueue.main.async { self.dropChanged?() } } } }
+    /// 28/10: true while a message to Claude is being typed: the island stays open even if the mouse wanders off.
+    @Published var trattiene = false { didSet { if trattiene != oldValue { DispatchQueue.main.async { self.dropChanged?() } } } }
     @Published var tab: IslandTab = .casa {
         didSet {
             guard tab != oldValue else { return }
@@ -630,8 +632,9 @@ final class IslandModule {
     }
 
     private func clickOutside() {
-        guard pinnedOpen || model.tiles.editing, let f = win?.frame, !contentFrame(f).contains(NSEvent.mouseLocation) else { return }
+        guard pinnedOpen || model.tiles.editing || model.trattiene, let f = win?.frame, !contentFrame(f).contains(NSEvent.mouseLocation) else { return }
         pinnedOpen = false
+        model.trattiene = false
         model.tilesMain.editing = false; model.tilesWork.editing = false
         layout(animated: true)
     }
@@ -652,11 +655,11 @@ final class IslandModule {
         let peekItem = PeekCenter.shared.current
         let scrive = model.email != nil
         let dropping = model.dropHover || model.dropNote != nil || scrive
-        win.testo = scrive
+        win.testo = scrive || model.tab == .claude      // 28/10: the Claude tab has a message box
         if scrive && !win.isKeyWindow { DispatchQueue.main.async { win.makeKey() } }
         if model.dropHover != catcherRaised { placeCatcher() }
-        let state = dropping ? .alert : forced ?? IslandLogic.state(hover: hover, pinnedOpen: pinnedOpen || model.tiles.editing, alert: alert,
-                                                hasContent: src != nil || hover || pinnedOpen || model.tiles.editing, peek: peekItem != nil)
+        let state = dropping ? .alert : forced ?? IslandLogic.state(hover: hover, pinnedOpen: pinnedOpen || model.tiles.editing || model.trattiene, alert: alert,
+                                                hasContent: src != nil || hover || pinnedOpen || model.tiles.editing || model.trattiene, peek: peekItem != nil)
         model.peek = peekItem
         if agentSource?.recentlyDone == true {      // a fine lavoro l'avviso si ritira da solo dopo sei secondi
             DispatchQueue.main.asyncAfter(deadline: .now() + 6.3) { [weak self] in self?.layout(animated: true) }
@@ -704,12 +707,14 @@ final class IslandModule {
                 let widest = rows.map { TileFlow.width($0, widths, gap: TileMetrics.gap) }.max() ?? 0
                 let n = CGFloat(max(1, rows.count))
                 w = min(max(700, widest + 40), sf.width - 40)
-                h = notch.height + 8 + n * TileMetrics.rowH + (n - 1) * TileMetrics.gap + 10 + (model.tiles.editing ? 32 : 0)
+                h = notch.height + 8 + n * TileMetrics.rowH + (n - 1) * TileMetrics.gap + 8 + IslandBarra.alta + (model.tiles.editing ? 32 : 0)
+            } else if model.tab == .claude {
+                w = 760; h = notch.height + 8 + ClaudeTab.altezza + 8 + IslandBarra.alta
             } else {
                 // 24/10: a freddo (né Claude né musica che suona) un riquadro solo, un pelo più stretto
                 let freddo = model.anteprimaFredda || ((agentSource?.isActive != true) && ((model.home as? MediaSource)?.track?.playing != true))
                 _ = freddo
-                w = 700; h = notch.height + 8 + 150 + 10        // 28/10: the three Home cards (casa-schede.swift)
+                w = 700; h = notch.height + 8 + 150 + 8 + IslandBarra.alta     // 28/10: the three Home cards and the tab bar
             }
         }
         model.width = w

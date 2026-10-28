@@ -9,24 +9,28 @@ import AppKit
 enum CasaColori {
     static func claude(_ chiaro: Bool) -> [Color] {
         chiaro ? [Color(red: 0.99, green: 0.95, blue: 0.91), Color(red: 0.93, green: 0.66, blue: 0.47)]
-               : [Color(red: 0.09, green: 0.07, blue: 0.06), Color(red: 0.62, green: 0.37, blue: 0.21)]
+               : [Color(red: 0.07, green: 0.06, blue: 0.06), Color(red: 0.80, green: 0.47, blue: 0.26)]
     }
     static func musica(_ chiaro: Bool) -> [Color] {
         chiaro ? [Color(red: 0.99, green: 0.93, blue: 0.94), Color(red: 0.93, green: 0.45, blue: 0.50)]
-               : [Color(red: 0.11, green: 0.03, blue: 0.05), Color(red: 0.78, green: 0.18, blue: 0.24)]
+               : [Color(red: 0.07, green: 0.03, blue: 0.04), Color(red: 0.88, green: 0.20, blue: 0.27)]
     }
     static func focus(_ chiaro: Bool) -> [Color] {
         chiaro ? [Color(red: 0.96, green: 0.94, blue: 1.00), Color(red: 0.72, green: 0.55, blue: 0.95)]
-               : [Color(red: 0.06, green: 0.04, blue: 0.11), Color(red: 0.62, green: 0.38, blue: 0.86)]
+               : [Color(red: 0.05, green: 0.04, blue: 0.09), Color(red: 0.72, green: 0.48, blue: 0.96)]
     }
-    static let viola = Color(red: 0.62, green: 0.38, blue: 0.86)
+    static let viola = Color(red: 0.66, green: 0.40, blue: 0.92)
 }
 
 struct CasaSchede: View {
     @ObservedObject var model: IslandModel
     var body: some View {
         HStack(spacing: 8) {
-            if let st = model.agent { SchedaClaude(store: st) } else { SchedaClaude(store: nil) }
+            Group {
+                if let st = model.agent { SchedaClaude(store: st) } else { SchedaClaude(store: nil) }
+            }
+            .onTapGesture { model.tab = .claude }          // 28/10: Claude has its own tab now
+            .hint(T("Apri Claude", "Open Claude"))
             if let m = model.home as? MediaSource { SchedaMusica(media: m) } else { SchedaMusica(media: nil) }
             if let d = model.dial?.store { SchedaFocus(store: d) }
         }
@@ -56,8 +60,19 @@ private struct Scheda<Accessorio: View>: View {
         .foregroundStyle(chiaro ? Color.black.opacity(0.85) : Color.white)
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: 22, style: .continuous)
-            .fill(LinearGradient(colors: colori, startPoint: .top, endPoint: .bottom)))
+        .background {
+            let forma = RoundedRectangle(cornerRadius: 22, style: .continuous)
+            ZStack {
+                forma.fill(LinearGradient(colors: [colori[0], colori[0], colori[1]], startPoint: .top, endPoint: .bottom))
+                // the glow rising from the bottom edge, as in the reference
+                RadialGradient(colors: [colori[1].opacity(0.95), colori[1].opacity(0.0)], center: UnitPoint(x: 0.5, y: 1.2),
+                               startRadius: 0, endRadius: 190)
+                    .clipShape(forma)
+                forma.strokeBorder(LinearGradient(colors: [Color.white.opacity(chiaro ? 0.5 : 0.06), colori[1].opacity(0.8)],
+                                                  startPoint: .top, endPoint: .bottom), lineWidth: 1)
+            }
+            .shadow(color: colori[1].opacity(chiaro ? 0.3 : 0.5), radius: 14, y: 6)
+        }
         .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 }
@@ -122,8 +137,6 @@ private struct SchedaClaude: View {
             .frame(width: 40, height: 40)
             .hint(T("Lavori di oggi finiti", "Today's jobs finished"))
         }
-        .onTapGesture { if let a = FinestraImpostazioni.shared.agent { EdgeDock.shared.reveal(a.tabItem, hideAfter: 8) } }
-        .hint(T("Mostra Claude Code", "Show Claude Code"))
     }
 }
 
