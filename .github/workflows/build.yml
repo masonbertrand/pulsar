@@ -1,8 +1,12 @@
 name: Build Pulsar
 
-# Every push builds and tests Pulsar on macOS 26. Pushes to main also publish it, once the signing secrets
-# are set, as a GitHub Release with an appcast; the installed app checks that appcast every few minutes and
-# updates itself. Other branches only build and test, so work in progress never reaches the app.
+# Every push builds and tests Pulsar. Pushes to main also publish it, once the signing secrets are set, as a
+# GitHub Release with an appcast; the installed app checks that appcast every few minutes and updates itself.
+# Other branches only build and test, so work in progress never reaches the app.
+#
+# 28/10: GitHub's Mac runners are sometimes all busy, and a job waits until it gives up ("not acquired").
+# So the same build runs on three kinds of Mac at once, and the first one that works is published.
+# Each builds the Apple-silicon app for macOS 26 (PULSAR_TARGET), whatever the runner's own macOS or chip.
 #
 # Secrets (Settings > Secrets and variables > Actions):
 #   SIGNING_CERT_P12       base64 of the self-signed code-signing certificate (.p12)
@@ -29,9 +33,12 @@ env:
 
 jobs:
   build:
-    # 28/10: the macOS 26 runners kept timing out for lack of machines. A macOS 15 Apple-silicon runner with
-    # Xcode 26 builds the same app for macOS 26 (PULSAR_TARGET), and that pool is much less busy.
-    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-26, macos-15, macos-26-intel]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
     env:
       PULSAR_TARGET: arm64-apple-macos26.0
     steps:
@@ -41,6 +48,7 @@ jobs:
         run: |
           sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
           sw_vers
+          uname -m
           xcrun swiftc --version
 
       - name: Tests
@@ -85,42 +93,78 @@ jobs:
           ./build.sh 2>&1 | tee build.log; [[ ${pipestatus[1]} == 0 ]]
           codesign --verify --deep --strict build/Pulsar.app
           codesign -d -r- build/Pulsar.app
+          lipo -archs build/Pulsar.app/Contents/MacOS/Pulsar
 
       - name: Show compiler errors
         if: failure()
         # turns swiftc errors into annotations, readable on the run page and through the API
         run: |
           cat build-tests.log build.log 2>/dev/null | grep -E '^(/|[A-Za-z]).*:[0-9]+:[0-9]+: error: ' | sort -u | head -40 |
-            sed -E 's#^('"$PWD"'/)?([^:]+):([0-9]+):([0-9]+): error: (.*)#::error file=\2,line=\3,col=\4::\2:\3 \5#'
+            sed -E 's#^('"$PWD"'/)?([^:]+):([0-9]+):([0-9]+): error: (.*)#::error file=\2,line=\3,col=\4::${{ matrix.runner }}: \2:\3 \5#'
           grep '^FAIL ' build-tests.log 2>/dev/null | sed 's/^/::error::/' || true
 
-      - name: Package
+      - name: Package and sign the update
         # ditto keeps the symlinks inside Sparkle.framework, so the code signature stays valid
-        run: ditto -c -k --keepParent build/Pulsar.app build/Pulsar.zip
+        run: |
+          mkdir -p out
+          ditto -c -k --keepParent build/Pulsar.app out/Pulsar.zip
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" build/Pulsar.app/Contents/Info.plist > out/version.txt
+          if [ -f "$RUNNER_TEMP/ed_key" ]; then
+            Vendor/Sparkle/bin/sign_update --ed-key-file "$RUNNER_TEMP/ed_key" out/Pulsar.zip > out/sig.txt
+            rm "$RUNNER_TEMP/ed_key"
+            cat out/sig.txt
+          fi
 
       - uses: actions/upload-artifact@v6
         with:
-          name: Pulsar
-          path: build/Pulsar.zip
+          name: Pulsar-${{ matrix.runner }}
+          path: out/
           retention-days: 30
 
+  # Takes the first Mac that produced an app (in this order of preference) and, on main, publishes it.
+  # On other branches it only checks that at least one did, so a branch build counts as passed.
+  publish:
+    name: Pick and publish
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: Pulsar-*
+          path: art
+
+      - name: Pick a build
+        id: pick
+        run: |
+          for r in macos-26 macos-15 macos-26-intel; do
+            if [ -f "art/Pulsar-$r/Pulsar.zip" ]; then
+              echo "Using the build from $r"
+              mkdir -p build && cp art/Pulsar-$r/* build/
+              echo "release=$([ -f build/sig.txt ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "::error::No Mac produced a build."
+          exit 1
+
       - name: Publish update
-        if: steps.sign.outputs.release == 'true' && github.ref == 'refs/heads/main'
+        if: steps.pick.outputs.release == 'true' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
           N: ${{ github.run_number }}
         run: |
-          SIG=$(Vendor/Sparkle/bin/sign_update --ed-key-file "$RUNNER_TEMP/ed_key" build/Pulsar.zip)
-          rm "$RUNNER_TEMP/ed_key"
-          echo "$SIG"
+          SIG=$(cat build/sig.txt)
           TAG="build-$N"
           URL="https://github.com/${{ github.repository }}/releases/download/$TAG/Pulsar.zip"
           git log -1 --format=%B | grep -v -e '^Co-Authored-By:' -e '^Claude-Session:' > build/notes.txt
           SIG="$SIG" URL="$URL" python3 - <<'EOF'
           import os, html, email.utils
-          n, sig, url = os.environ["N"], os.environ["SIG"], os.environ["URL"]
+          n, sig, url = os.environ["N"], os.environ["SIG"].strip(), os.environ["URL"]
           notes = html.escape(open("build/notes.txt").read().strip())
-          short = __import__("plistlib").load(open("build/Pulsar.app/Contents/Info.plist", "rb"))["CFBundleShortVersionString"]
+          short = open("build/version.txt").read().strip()
           open("build/appcast.xml", "w").write(f"""<?xml version="1.0" encoding="utf-8"?>
           <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
             <channel>
@@ -143,7 +187,7 @@ jobs:
           gh release create "$TAG" build/Pulsar.zip build/appcast.xml --title "Pulsar build $N" --notes-file build/notes.txt --latest
 
       - name: Keep the last 10 releases
-        if: steps.sign.outputs.release == 'true' && github.ref == 'refs/heads/main'
+        if: steps.pick.outputs.release == 'true' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
