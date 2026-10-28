@@ -123,47 +123,44 @@ struct VWho: View {
 // MARK: - Testa del pannello
 
 enum IslandTab {
-    case casa, tessere, lavoro       // 27/10: Work, a second set of tiles for getting things done
-    var isTiles: Bool { self != .casa }
+    case casa, claude, tessere, lavoro   // 27/10: Work; 28/10: Claude, Claude Code without the terminal
+    var isTiles: Bool { self == .tessere || self == .lavoro }
 }
 
-/// Nella fascia ai lati del notch, come in coucou: a sinistra casa e tessere (più Personalizza nelle tessere),
-/// a destra lo stato o, nelle tessere, i pulsanti di prima (impostazioni, griglia, volume, luce, tema, AirDrop, File, Note).
+/// 28/10: the band beside the notch. Left: the date and time. Right: Claude's status when it has one,
+/// or on the tile tabs the quick buttons (settings, app grid, brightness, theme, AirDrop, Files, Notes).
+/// The tabs moved to the bar at the bottom (IslandBarra).
 struct IslandHead: View {
     @ObservedObject var model: IslandModel
-    @ObservedObject var tiles: TileModel
-    var status: String
-    init(model: IslandModel, status: String) { self.model = model; self.tiles = model.tiles; self.status = status }
+    var status: String?
+    init(model: IslandModel, status: String?) { self.model = model; self.status = status }
 
     var body: some View {
         let half = max(0, (model.width - model.notchWidth) / 2 - 30)
         HStack(spacing: 0) {
             HStack(spacing: 2) {
-                icon("house.fill", T("Casa", "Home"), on: model.tab == .casa) { model.tab = .casa }
-                icon("square.grid.2x2.fill", T("Tessere", "Tiles"), on: model.tab == .tessere) { model.tab = .tessere }
-                icon("briefcase.fill", T("Lavoro", "Work"), on: model.tab == .lavoro) { model.tab = .lavoro }
-                if model.tab.isTiles {
-                    icon(tiles.editing ? "checkmark" : "plus", T("Personalizza", "Customize"), on: tiles.editing) { tiles.editing.toggle() }
-                }
+                DataOra().padding(.leading, 4)
                 Spacer(minLength: 0)
             }
             .frame(width: half)
             Spacer(minLength: 0)
             HStack(spacing: 2) {
                 Spacer(minLength: 0)
+                if let status {
+                    Text(status).font(.system(size: 11.5)).foregroundStyle(Night.amber).lineLimit(1).padding(.trailing, 6)
+                        .contentShape(Rectangle()).onTapGesture { model.tab = .claude }
+                        .hint(T("Apri Claude", "Open Claude"))
+                }
                 if model.tab.isTiles {
                     icon("gearshape", T("Impostazioni di Sistema", "System Settings")) { IslandActions.settings() }
                     icon("square.grid.3x3", T("Griglia app", "App grid")) { model.openGrid?() }
-                    if let d = model.dial {
-                        if d.enabled, let it = d.soundItem { icon("speaker.wave.2", T("Volume", "Volume")) { EdgeDock.shared.reveal(it, hideAfter: 4) } }
-                        if d.lightEnabled, let it = d.lightItem { icon("sun.max", T("Luminosità", "Brightness")) { EdgeDock.shared.reveal(it, hideAfter: 4) } }
+                    if let d = model.dial, d.lightEnabled, let it = d.lightItem {
+                        icon("sun.max", T("Luminosità", "Brightness")) { EdgeDock.shared.reveal(it, hideAfter: 4) }
                     }
                     icon("circle.lefthalf.filled", T("Dark Matte o White Matte", "Dark Matte or White Matte")) { model.toggleTheme?() }
                     icon("dot.radiowaves.up.forward", "AirDrop") { IslandActions.airDrop() }
                     icon("folder", T("File", "Files")) { IslandActions.files() }
                     icon("note.text", T("Note", "Notes")) { IslandActions.notes() }
-                } else {
-                    Text(status).font(.system(size: 11.5)).foregroundStyle(Volta.t3).lineLimit(1).padding(.trailing, 4)
                 }
             }
             .frame(width: half)
@@ -185,6 +182,65 @@ struct IslandHead: View {
     }
 }
 
+/// 28/10: the tabs as a row at the bottom, like the user's reference: the open one is a pill with its name,
+/// the others just an icon. On the right: customize (on the tile tabs) and the volume dial.
+struct IslandBarra: View {
+    @ObservedObject var model: IslandModel
+    @ObservedObject var tiles: TileModel
+    init(model: IslandModel) { self.model = model; self.tiles = model.tiles }
+
+    static let alta: CGFloat = 38          // 30 of bar + 8 below it
+
+    var body: some View {
+        HStack(spacing: 4) {
+            scheda(.casa, "house", "house.fill", T("Casa", "Home"))
+            scheda(.claude, "asterisk", "asterisk", "Claude", avviso: model.agent?.hasPending == true || model.agent?.question != nil)
+            scheda(.tessere, "square.grid.2x2", "square.grid.2x2.fill", T("Tessere", "Tiles"))
+            scheda(.lavoro, "briefcase", "briefcase.fill", T("Lavoro", "Work"))
+            Spacer(minLength: 0)
+            if model.tab.isTiles {
+                tasto(tiles.editing ? "checkmark" : "plus", tiles.editing ? T("Fatto", "Done") : T("Personalizza", "Customize"), on: tiles.editing) {
+                    tiles.editing.toggle()
+                }
+            }
+            if let d = model.dial, d.enabled, let it = d.soundItem {
+                tasto("speaker.wave.2", T("Volume", "Volume")) { EdgeDock.shared.reveal(it, hideAfter: 4) }
+            }
+        }
+        .padding(.horizontal, 20)
+        .frame(height: 30)
+    }
+
+    private func scheda(_ t: IslandTab, _ simbolo: String, _ pieno: String, _ nome: String, avviso: Bool = false) -> some View {
+        let on = model.tab == t
+        return Button { model.tab = t } label: {
+            HStack(spacing: 6) {
+                Image(systemName: on ? pieno : simbolo).font(.system(size: 12, weight: .medium))
+                if on { Text(nome).font(.system(size: 12.5, weight: .medium)) }
+            }
+            .foregroundStyle(on ? Volta.t1 : Volta.t3)
+            .padding(.horizontal, on ? 12 : 9).frame(height: 28)
+            .background(Capsule().fill(on ? Volta.pill : .clear))
+            .overlay(alignment: .topTrailing) {
+                if avviso { Circle().fill(Night.amber).frame(width: 7, height: 7).offset(x: -3, y: 3) }   // Claude is waiting for you
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .hint(nome)
+        .animation(.easeOut(duration: 0.18), value: on)
+    }
+
+    private func tasto(_ s: String, _ nome: String, on: Bool = false, _ azione: @escaping () -> Void) -> some View {
+        Button(action: azione) {
+            Image(systemName: s).font(.system(size: 12, weight: .medium)).foregroundStyle(on ? Volta.t1 : Volta.t3)
+                .frame(width: 28, height: 28).background(Circle().fill(on ? Volta.pill : .clear)).contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .hint(nome)
+    }
+}
+
 // MARK: - Casa
 
 /// Niente in corso: una tessera grande con la musica e una colonna di tre righe-dato.
@@ -192,13 +248,7 @@ struct IslandHead: View {
 struct IslandCasa: View {
     @ObservedObject var model: IslandModel
     var body: some View {
-        if model.anteprimaFredda {
-            WelcomeCard(store: model.agent, volo: true, media: model.home as? MediaSource)   // anteprima: sempre il riquadro unico
-        } else if let st = model.agent, !st.active.isEmpty {
-            ClaudeCasa(store: st)
-        } else {
-            CasaFredda(model: model)
-        }
+        CasaSchede(model: model)        // 28/10: three colour cards, Claude Code, Music, Focus (casa-schede.swift)
     }
 }
 
@@ -398,18 +448,22 @@ struct IslandPanelContent: View {
             } else {
                 IslandHead(model: model, status: status)          // nella fascia ai lati del notch
                 Spacer().frame(height: 8)
+                let avviso = model.source.map { !$0.usesHome } ?? false
                 Group {
-                    if let s = model.source, !s.usesHome {
+                    if avviso, let s = model.source {
                         s.expandedView()
                     } else if model.tab.isTiles {
                         TileRow(tiles: model.tiles, widgets: model.widgets).id(model.tab)
+                    } else if model.tab == .claude {
+                        if let st = model.agent { ClaudeTab(store: st, model: model).frame(height: ClaudeTab.altezza) }
                     } else {
-                        IslandCasa(model: model).frame(height: 128)
+                        IslandCasa(model: model).frame(height: 150)
                     }
                 }
-                .padding(.horizontal, 20).padding(.bottom, 10)
+                .padding(.horizontal, 20).padding(.bottom, avviso ? 10 : 8)
                 .frame(maxHeight: .infinity, alignment: .top)
                 .clipped()                                       // mai più alto del pannello: la testa resta al suo posto
+                if !avviso { IslandBarra(model: model).padding(.bottom, 8) }     // 28/10: the tabs, at the bottom
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -417,15 +471,15 @@ struct IslandPanelContent: View {
         .clipped()          // niente può allargare il pannello oltre la sua misura
     }
 
-    private var status: String {
-        guard let st = model.agent else { return Saluto.ciao(Persona.nome, inglese: !pulsarItalian) }
+    private var status: String? {
+        guard let st = model.agent else { return nil }
         if st.question != nil { return T("Claude ti chiede", "Claude asks") }
         if st.hasPending { return T("aspetta il tuo ok", "waiting for your OK") }
         if let s = st.current, s.status == "done", Date().timeIntervalSince1970 - s.finished < 15 {
             return T("fatto in \(AgentLook.duration(s))", "done in \(AgentLook.duration(s))")
         }
         let n = st.active.count
-        return n > 0 ? T("\(n) in corso", "\(n) running") : Saluto.ciao(Persona.nome, inglese: !pulsarItalian)
+        return n > 0 ? T("\(n) in corso", "\(n) running") : nil
     }
 }
 

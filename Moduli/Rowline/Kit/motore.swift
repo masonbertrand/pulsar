@@ -635,7 +635,9 @@ final class Motore: ObservableObject {
     func scorriA(_ schermo: CGDirectDisplayID, _ s: CGFloat) {
         guard let st = strisce[schermo], !st.colonne.isEmpty, st.xs.count == st.colonne.count else { return }
         let centro = s + st.vista / 2
-        let i = st.xs.indices.min { abs(st.xs[$0] + st.larghezze[$0] / 2 - centro) < abs(st.xs[$1] + st.larghezze[$1] / 2 - centro) } ?? st.fuoco
+        // 28/10: split up, Xcode 26.3 gave up type-checking it in one expression
+        func distanza(_ k: Int) -> CGFloat { let c: CGFloat = st.xs[k] + st.larghezze[k] / 2; return abs(c - centro) }
+        let i = st.xs.indices.min { distanza($0) < distanza($1) } ?? st.fuoco
         st.scorrimento = s
         st.centrata = false
         st.fuoco = i
