@@ -29,13 +29,17 @@ env:
 
 jobs:
   build:
-    # macOS 26 (Tahoe) on Apple silicon, as build.sh requires
-    runs-on: macos-26
+    # 28/10: the macOS 26 runners kept timing out for lack of machines. A macOS 15 Apple-silicon runner with
+    # Xcode 26 builds the same app for macOS 26 (PULSAR_TARGET), and that pool is much less busy.
+    runs-on: macos-15
+    env:
+      PULSAR_TARGET: arm64-apple-macos26.0
     steps:
       - uses: actions/checkout@v5
 
       - name: Toolchain
         run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
           sw_vers
           xcrun swiftc --version
 

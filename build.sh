@@ -18,6 +18,7 @@ cp Info.plist "$APP/Contents/Info.plist"
 #   PULSAR_FEED_URL       SUFeedURL, the appcast Sparkle reads
 #   PULSAR_ED_PUBLIC_KEY  SUPublicEDKey, checks the EdDSA signature of each downloaded update
 #   PULSAR_SIGN_IDENTITY  a fixed code-signing identity instead of ad-hoc, so macOS keeps permissions across updates
+#   PULSAR_TARGET         e.g. arm64-apple-macos26.0, to build for macOS 26 on an older Mac that has Xcode 26
 PLIST="$APP/Contents/Info.plist"
 if [[ -n "$PULSAR_BUILD_NUMBER" ]]; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $PULSAR_BUILD_NUMBER" "$PLIST"
@@ -41,8 +42,9 @@ ditto Vendor/Sparkle/Sparkle.framework "$APP/Contents/Frameworks/Sparkle.framewo
 
 source ./sorgenti.sh
 KIT="build/rowline-kit"
-kit_rowline "$KIT" -O -D DA_SORGENTE
-swiftc -O -D DA_SORGENTE ${=$(kit_flag "$KIT")} ${=LIBRERIE} $SPARKLE $CORE $MODULI -o "$APP/Contents/MacOS/Pulsar"
+TARGET=(); if [[ -n "$PULSAR_TARGET" ]]; then TARGET=(-target "$PULSAR_TARGET"); fi
+kit_rowline "$KIT" -O -D DA_SORGENTE $TARGET
+swiftc -O -D DA_SORGENTE $TARGET ${=$(kit_flag "$KIT")} ${=LIBRERIE} $SPARKLE $CORE $MODULI -o "$APP/Contents/MacOS/Pulsar"
 xattr -cr "$APP"
 
 # Ad-hoc signature. macOS asks for permissions again after every rebuild; to keep them, sign with a fixed
