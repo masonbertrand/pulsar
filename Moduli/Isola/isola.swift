@@ -87,7 +87,7 @@ final class IslandModel: ObservableObject {
     let tilesMain = TileModel()
     let tilesWork = TileModel(chiave: .isolaTilesLavoro, standard: .lavoro)
     /// 27/10: the tiles of the tab you're looking at (Tiles or Work); on Home, the Tiles ones.
-    var tiles: TileModel { tab == .lavoro ? tilesWork : tilesMain }
+    var tiles: TileModel { tilesMain }      // 28/10: Work became Communications; tilesWork stays saved, unused
     var widgets: [IslandWidget] = []
     var notchWidth: CGFloat = 190
     var notchHeight: CGFloat = 32

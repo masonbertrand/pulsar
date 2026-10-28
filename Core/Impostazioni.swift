@@ -71,7 +71,8 @@ enum Chiave: String, CaseIterable {
     case isolaPrioritaLarga
     case isolaThumb
     case isolaTiles
-    case isolaTilesLavoro   // 27/10: the Work tab's tiles
+    case isolaTilesLavoro   // 27/10: the Work tab's tiles (the tab became Communications on 28/10)
+    case notionPagine       // 28/10: pages pinned to the Notion tab, as JSON
     case isolaTray
     case isolaUltimoBrano
     case isolaWAChat

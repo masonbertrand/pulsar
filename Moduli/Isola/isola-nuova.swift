@@ -123,8 +123,10 @@ struct VWho: View {
 // MARK: - Testa del pannello
 
 enum IslandTab {
-    case casa, claude, tessere, lavoro   // 27/10: Work; 28/10: Claude, Claude Code without the terminal
-    var isTiles: Bool { self == .tessere || self == .lavoro }
+    // 27/10 Work; 28/10 Claude (Claude Code without the terminal), then Work became Communications,
+    // and Files, Music, Meetings and Notion were added (isola-schede.swift)
+    case casa, claude, tessere, comunicazioni, file, musica, riunioni, notion
+    var isTiles: Bool { self == .tessere }
 }
 
 /// 28/10: the band beside the notch. Left: the date and time. Right: Claude's status when it has one,
@@ -193,6 +195,7 @@ struct IslandHead: View {
 struct IslandBarra: View {
     @ObservedObject var model: IslandModel
     @ObservedObject var tiles: TileModel
+    @ObservedObject private var dock = DockBadges.shared      // for the unread dot on Comms
     init(model: IslandModel) { self.model = model; self.tiles = model.tiles }
 
     static let alta: CGFloat = 34          // 28 of bar + 6 below it
@@ -204,12 +207,18 @@ struct IslandBarra: View {
                 scheda(.casa, "house", "house.fill", T("Casa", "Home"))
                 scheda(.claude, "asterisk", "asterisk", "Claude", avviso: model.agent?.hasPending == true || model.agent?.question != nil)
                 scheda(.tessere, "square.grid.2x2", "square.grid.2x2.fill", T("Tessere", "Tiles"))
-                scheda(.lavoro, "briefcase", "briefcase.fill", T("Lavoro", "Work"))
+                scheda(.comunicazioni, "bubble.left.and.bubble.right", "bubble.left.and.bubble.right.fill", T("Messaggi", "Comms"),
+                       avviso: dock.totale > 0)
+                scheda(.file, "folder", "folder.fill", "File")
+                scheda(.musica, "music.note", "music.note", T("Musica", "Music"))
+                scheda(.riunioni, "video", "video.fill", T("Riunioni", "Meetings"))
+                scheda(.notion, "n.square", "n.square.fill", "Notion")
             }
             HStack(spacing: 4) { Spacer(minLength: 0); destra }
         }
         .padding(.horizontal, 20)
         .frame(height: 28)
+        .onAppear { dock.aggiorna() }          // fresh unread counts each time the island opens
     }
 
     @ViewBuilder private var destra: some View {
@@ -475,6 +484,17 @@ struct IslandPanelContent: View {
                         .frame(height: model.altezzaContenuto)
                     } else if model.tab == .claude {
                         if let st = model.agent { ClaudeTab(store: st, model: model).frame(height: model.altezzaContenuto) }
+                    } else if model.tab != .casa {
+                        Group {
+                            switch model.tab {
+                            case .comunicazioni: CommsTab()
+                            case .file: FilesTab()
+                            case .musica: MusicTab(media: model.home as? MediaSource)
+                            case .riunioni: MeetingsTab()
+                            default: NotionTab()
+                            }
+                        }
+                        .frame(height: model.altezzaContenuto)
                     } else {
                         IslandCasa(model: model).frame(height: model.altezzaContenuto)
                     }

@@ -578,6 +578,8 @@ final class CalendarModel: ObservableObject {
         var id: String = ""; var link: URL? = nil
     }
     @Published private(set) var next: Next?
+    /// 28/10: the rest of today, for the Meetings tab (AgendaLogic.resto).
+    @Published private(set) var oggi: [Next] = []
     /// Fase 4: la riunione che la fonte "riunione" dell'isola guarda. Separata da `next`, così il widget resta com'è:
     /// il primo evento con orario la cui finestra non è ancora chiusa (Riunione.scegli), cercato da un'ora fa a 24 ore da ora.
     @Published private(set) var prossimaRiunione: Next?
@@ -633,6 +635,8 @@ final class CalendarModel: ObservableObject {
             .filter { $0.startDate != nil && $0.endDate != nil && $0.status != .canceled }
         let pick = ProssimoEvento.scegli(events.map { .init(start: $0.startDate, end: $0.endDate, allDay: $0.isAllDay) }, ora: now)
         let nuovo = pick.map { Self.voce(events[$0]) }
+        let resto = AgendaLogic.resto(events.map { .init(start: $0.startDate, end: $0.endDate, allDay: $0.isAllDay) }, ora: now).map { Self.voce(events[$0]) }
+        if resto != oggi { oggi = resto }
         if nuovo != next { next = nuovo }
 
         // fase 4: la prossima riunione, nelle prossime 24 ore (una iniziata da poco c'è ancora)
