@@ -138,17 +138,18 @@ jobs:
 
       - name: Pick a build
         id: pick
+        # with a single artifact the files may land straight in art/, with several in art/Pulsar-<runner>/
         run: |
+          find art -type f | sort
+          f=""
           for r in macos-26 macos-15 macos-26-intel; do
-            if [ -f "art/Pulsar-$r/Pulsar.zip" ]; then
-              echo "Using the build from $r"
-              mkdir -p build && cp art/Pulsar-$r/* build/
-              echo "release=$([ -f build/sig.txt ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
+            f=$(find art -path "*Pulsar-$r/*" -name Pulsar.zip | head -1); [ -n "$f" ] && break
           done
-          echo "::error::No Mac produced a build."
-          exit 1
+          [ -z "$f" ] && f=$(find art -name Pulsar.zip | head -1)
+          if [ -z "$f" ]; then echo "::error::No Mac produced a build."; exit 1; fi
+          echo "Using $f"
+          mkdir -p build && cp "$(dirname "$f")"/* build/
+          echo "release=$([ -f build/sig.txt ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
       - name: Publish update
         if: steps.pick.outputs.release == 'true' && github.ref == 'refs/heads/main'
