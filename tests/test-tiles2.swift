@@ -40,3 +40,10 @@ func testTiles2Logic() {
 
     equal(StatisticheFocus.settimana(["2026-10-27": 50, "2026-10-25": 25], oggi: at(9), n: 3), [25, 0, 50])
 }
+
+func testLevels() {
+    equal(Livello.carico(0.41), .buono); equal(Livello.carico(0.82), .medio); equal(Livello.carico(0.9), .cattivo)
+    equal(Livello.riserva(80), .buono); equal(Livello.riserva(30), .medio); equal(Livello.riserva(20), .cattivo)
+    equal(Livello.riserva(10, inCarica: true), .buono, "charging is fine")
+    equal(Livello.spazio(200), .buono); equal(Livello.spazio(30), .medio); equal(Livello.spazio(5), .cattivo)
+}

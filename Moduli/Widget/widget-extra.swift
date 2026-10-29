@@ -510,7 +510,7 @@ private struct MacTile: View {
                             meter("CPU", st.cpu)
                             meter("RAM", st.memoryUsed)
                             Text(T(String(format: "Disco %.0f GB liberi", st.diskFreeGB), String(format: "Disk %.0f GB free", st.diskFreeGB)))
-                                .font(.system(size: 10).monospacedDigit()).foregroundStyle(Color.primary.opacity(0.55))
+                                .font(.system(size: 10).monospacedDigit()).foregroundStyle(Livello.spazio(st.diskFreeGB).colore.opacity(0.9))
                             if st.thermal == .serious || st.thermal == .critical {
                                 Label(T("Caldo", "Hot"), systemImage: "thermometer.high").font(.system(size: 10)).foregroundStyle(Night.amber)
                             }
@@ -529,7 +529,7 @@ private struct MacTile: View {
         let sym = st.battery?.pluggedIn == true ? "battery.100percent.bolt" : p <= 20 ? "battery.25percent" : p <= 50 ? "battery.50percent" : "battery.75percent"
         return HStack(spacing: 6) {
             Image(systemName: sym).font(.system(size: 16)).symbolRenderingMode(.hierarchical)
-                .foregroundStyle(p <= 20 && st.battery?.pluggedIn != true ? Night.red : Color.primary)
+                .foregroundStyle(Livello.riserva(p, inCarica: st.battery?.pluggedIn == true).colore)      // 29/10: green, amber, red
             Text(st.battery == nil ? "…" : "\(p)%").font(.system(size: big ? 22 : 15, weight: .light).monospacedDigit())
         }
     }
@@ -538,7 +538,7 @@ private struct MacTile: View {
         HStack(spacing: 6) {
             Text(label).font(.system(size: 9, weight: .medium)).foregroundStyle(Color.primary.opacity(0.5)).frame(width: 26, alignment: .leading)
             Capsule().fill(Color.primary.opacity(0.12)).frame(height: 4)
-                .overlay(alignment: .leading) { GeometryReader { g in Capsule().fill(v > 0.85 ? Night.amber : Theme.accent).frame(width: g.size.width * v) } }
+                .overlay(alignment: .leading) { GeometryReader { g in Capsule().fill(Livello.carico(v).colore).frame(width: g.size.width * v) } }
             Text("\(Int(v * 100))%").font(.system(size: 9).monospacedDigit()).foregroundStyle(Color.primary.opacity(0.55)).frame(width: 28, alignment: .trailing)
         }
     }

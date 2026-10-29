@@ -515,20 +515,29 @@ struct MusicTab: View {
         let riga: (Image, String, Float, Bool, @escaping (Float) -> Void, @escaping () -> Void) -> AnyView
 
         var body: some View {
-            Group {
-                if store.apps.isEmpty {
-                    Text(T("Nessuna app sta suonando", "No app is playing")).font(.system(size: 11)).foregroundStyle(Volta.t3)
-                }
-                ForEach(store.apps.prefix(3)) { app in
-                    let g = store.gain(app.id)
-                    let icona = (icone.icona(bundle: app.id) ?? app.icon).map { Image(nsImage: $0) } ?? Image(systemName: "app")
-                    riga(icona, app.name, g, g == 0, { store.setGain(app.id, $0) }, { store.setGain(app.id, g == 0 ? 1 : 0) })
-                }
-                if store.tapError {
-                    Text(T("Serve Registrazione audio di sistema", "Needs System Audio Recording")).font(.system(size: 10)).foregroundStyle(Night.amber)
+            // 29/10: every app with audio open (Spotify, Music, browsers, calls…), not only the ones playing this second
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 5) {
+                    if store.tutte.isEmpty {
+                        Text(T("Nessuna app con l'audio aperto", "No app has audio open")).font(.system(size: 11)).foregroundStyle(Volta.t3)
+                    }
+                    ForEach(store.tutte) { app in
+                        let g = store.gain(app.id)
+                        let icona = (icone.icona(bundle: app.id) ?? app.icon).map { Image(nsImage: $0) } ?? Image(systemName: "app")
+                        riga(icona, app.name, g, g == 0, { store.setGain(app.id, $0) }, { store.setGain(app.id, g == 0 ? 1 : 0) })
+                            .opacity(app.playing ? 1 : 0.6)
+                    }
+                    if store.tapError {
+                        Button { TileOpen.url("x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture") } label: {
+                            Text(T("Serve Registrazione audio di sistema: apri", "Needs System Audio Recording: open settings"))
+                                .font(.system(size: 10)).foregroundStyle(Night.amber).underline()
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
             .onAppear { store.refresh() }
+            .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in store.refresh() }
         }
     }
 }

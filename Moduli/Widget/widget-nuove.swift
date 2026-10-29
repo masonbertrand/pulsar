@@ -332,7 +332,12 @@ private struct NetworkTile: View {
                     .buttonStyle(.plain).hint(T("Copia l'indirizzo IP", "Copy the IP address"))
                 }
             }
-            Text(T("Indirizzo locale", "Local address")).font(.system(size: 9.5)).foregroundStyle(Color.primary.opacity(0.45))
+            // 29/10: green when connected, red when offline
+            HStack(spacing: 5) {
+                Circle().fill((ip == nil ? Livello.cattivo : Livello.buono).colore).frame(width: 6, height: 6)
+                Text(ip == nil ? T("Offline", "Offline") : T("Connesso · indirizzo locale", "Connected · local address"))
+                    .font(.system(size: 9.5)).foregroundStyle(Color.primary.opacity(0.5))
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear { perf.watch(true); ip = Self.indirizzo() }

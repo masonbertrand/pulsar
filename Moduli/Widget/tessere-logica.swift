@@ -91,3 +91,19 @@ enum StatisticheFocus {
         }
     }
 }
+
+/// 29/10, the user: "colours like green for good, red for bad". One set of thresholds for every tile.
+enum Livello: Equatable {
+    case buono, medio, cattivo
+
+    /// Load (CPU, RAM, 0...1): green under 60%, amber under 85%, red above.
+    static func carico(_ v: Double) -> Livello { v < 0.6 ? .buono : v < 0.85 ? .medio : .cattivo }
+
+    /// A battery: green above 40% or while charging, amber down to 21%, red at 20% and below.
+    static func riserva(_ percento: Int, inCarica: Bool = false) -> Livello {
+        inCarica || percento > 40 ? .buono : percento > 20 ? .medio : .cattivo
+    }
+
+    /// Free disk space in GB: green above 50, amber above 15, red below.
+    static func spazio(_ gb: Double) -> Livello { gb > 50 ? .buono : gb > 15 ? .medio : .cattivo }
+}

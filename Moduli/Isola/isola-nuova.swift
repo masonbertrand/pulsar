@@ -199,6 +199,8 @@ struct IslandHead: View {
                     icon("folder", T("File", "Files")) { IslandActions.files() }
                     icon("note.text", T("Note", "Notes")) { IslandActions.notes() }
                 }
+                // 29/10: Pulsar's own settings, from every tab
+                icon("slider.horizontal.3", T("Impostazioni di Pulsar", "Pulsar Settings")) { FinestraImpostazioni.shared.apri() }
             }
             .frame(width: half)
         }
@@ -292,6 +294,8 @@ struct IslandBarra: View {
             Button(T("Sposta a destra", "Move right")) { if let i = model.schedeVisibili.firstIndex(of: t) { model.spostaScheda(t, a: i + 1) } }
             if t != .casa { Button(T("Nascondi questa scheda", "Hide this tab")) { model.nascondi(t) } }
             if !model.schedeNascoste.isEmpty { Button(T("Mostra tutte le schede", "Show all tabs")) { model.schedeNascoste = [] } }
+            Divider()
+            Button(T("Personalizza le schede…", "Customize tabs…")) { FinestraImpostazioni.shared.apri(.isola) }
         }
     }
 
