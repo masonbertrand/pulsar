@@ -576,6 +576,7 @@ final class CalendarModel: ObservableObject {
     struct Next: Equatable {
         var title: String; var start: Date; var end: Date; var allDay: Bool
         var id: String = ""; var link: URL? = nil
+        var invitati: [String] = []      // 29/10: attendees' email addresses, for "Email attendees" in Meetings
     }
     @Published private(set) var next: Next?
     /// 28/10: the rest of today, for the Meetings tab (AgendaLogic.resto).
@@ -647,6 +648,17 @@ final class CalendarModel: ObservableObject {
         if riunione != prossimaRiunione { prossimaRiunione = riunione }
     }
 
+    /// 29/10: a "Focus" block in the default calendar, from now for `minuti`. False without calendar access.
+    @discardableResult
+    func bloccaFocus(minuti: Int) -> Bool {
+        guard EKEventStore.authorizationStatus(for: .event) == .fullAccess, let cal = store.defaultCalendarForNewEvents else { return false }
+        let e = EKEvent(eventStore: store)
+        e.title = T("Concentrazione", "Focus"); e.startDate = Date(); e.endDate = Date().addingTimeInterval(Double(minuti * 60)); e.calendar = cal
+        guard (try? store.save(e, span: .thisEvent)) != nil else { return false }
+        load()
+        return true
+    }
+
     /// Fase 4: niente giorno intero, niente annullati, niente rifiutati dall'utente.
     private static func contaComeRiunione(_ ev: EKEvent) -> Bool {
         guard !ev.isAllDay, ev.startDate != nil, ev.endDate != nil, ev.status != .canceled else { return false }
@@ -657,7 +669,11 @@ final class CalendarModel: ObservableObject {
     private static func voce(_ ev: EKEvent) -> Next {
         Next(title: ev.title ?? "", start: ev.startDate, end: ev.endDate, allDay: ev.isAllDay,
              id: ev.calendarItemIdentifier,
-             link: Riunione.link(in: [ev.url?.absoluteString, ev.location, ev.notes]))
+             link: Riunione.link(in: [ev.url?.absoluteString, ev.location, ev.notes]),
+             invitati: (ev.attendees ?? []).filter { !$0.isCurrentUser }.compactMap { a in
+                 let u = a.url.absoluteString
+                 return u.lowercased().hasPrefix("mailto:") ? String(u.dropFirst(7)) : nil
+             })
     }
 }
 
