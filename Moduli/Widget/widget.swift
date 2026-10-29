@@ -704,6 +704,22 @@ final class CalendarModel: ObservableObject {
         if riunione != prossimaRiunione { prossimaRiunione = riunione }
     }
 
+    /// 29/10: a day's events for the Calendar tab, all-day first then by time. Empty without access.
+    func eventi(giorno: Date) -> [Next] {
+        guard !demo, EKEventStore.authorizationStatus(for: .event) == .fullAccess else { return [] }
+        let cal = Calendar.current, inizio = cal.startOfDay(for: giorno)
+        guard let fine = cal.date(byAdding: .day, value: 1, to: inizio) else { return [] }
+        return store.events(matching: store.predicateForEvents(withStart: inizio, end: fine, calendars: nil))
+            .filter { $0.status != .canceled }
+            .sorted { $0.isAllDay != $1.isAllDay ? $0.isAllDay : $0.startDate < $1.startDate }
+            .map(Self.voce)
+    }
+
+    /// How many events each of `n` days from `da` has, for the week strip.
+    func conteggi(da: Date, n: Int) -> [Int] {
+        (0..<n).map { k in eventi(giorno: Calendar.current.date(byAdding: .day, value: k, to: da) ?? da).count }
+    }
+
     /// 29/10: a "Focus" block in the default calendar, from now for `minuti`. False without calendar access.
     @discardableResult
     func bloccaFocus(minuti: Int) -> Bool {

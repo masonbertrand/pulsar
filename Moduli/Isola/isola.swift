@@ -304,6 +304,12 @@ enum IslandDrop {
     static func deliver(_ urls: [URL], toClaude: Bool, model: IslandModel) {
         DropLog.add("letti \(urls.count) file, a \(toClaude ? "Claude" : "Vassoio"): \(urls.map(\.lastPathComponent).joined(separator: ", "))")
         guard !urls.isEmpty else { model.setDropHover(false); return }
+        // 29/10: with the Files tab open, the file goes there, to be worked on (FilesTab)
+        if model.tab == .file {
+            DownloadsModel.shared.lasciati = urls
+            model.setDropHover(false)
+            return
+        }
         // 19/10: lasciato su una tessera di Muta (scopo, formato, unisci) lo converte Muta; sul posto di prima, come prima
         if MutaCentro.shared.prendi(urls) { DropLog.add("preso da Muta"); model.setDropHover(false); return }
         let names = urls.map(\.lastPathComponent)
@@ -743,7 +749,7 @@ final class IslandModule {
         let peekItem = PeekCenter.shared.current
         let scrive = model.email != nil
         let dropping = model.dropHover || model.dropNote != nil || scrive
-        win.testo = scrive || model.tab == .claude      // 28/10: the Claude tab has a message box
+        win.testo = scrive || model.tab == .claude || model.tab == .notion      // message box (Claude), task box (To-do)
         if scrive && !win.isKeyWindow { DispatchQueue.main.async { win.makeKey() } }
         if model.dropHover != catcherRaised { placeCatcher() }
         let state = dropping ? .alert : forced ?? IslandLogic.state(hover: hover, pinnedOpen: pinnedOpen || model.tiles.editing || model.trattiene || model.casaModifica, alert: alert,
@@ -781,7 +787,7 @@ final class IslandModule {
         case .expanded, .alert:
             // 17/10 sera: pannello attaccato al bordo alto, testa nella fascia del notch: notch + 8 + tessera + 10
             if scrive { w = 600; h = notch.height + 8 + EmailCard.altezza + 10 }
-            else if dropping { w = 600; h = notch.height + 8 + (MutaCentro.shared.mostraTessere && model.dropNote == nil ? MutaZona.altezza : 132) + 10 }
+            else if dropping && model.tab != .file { w = 600; h = notch.height + 8 + (MutaCentro.shared.mostraTessere && model.dropNote == nil ? MutaZona.altezza : 132) + 10 }
             else if let s = src, model.avviso(s) {
                 if let a = s as? AgentIslandSource { w = 680; h = notch.height + 8 + a.height + 10 }
                 else if let ps = s.panelSize { w = ps.width; h = notch.height + 8 + ps.height + 10 }   // 25/10: misurata sul contenuto

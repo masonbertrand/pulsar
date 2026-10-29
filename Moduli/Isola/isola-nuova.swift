@@ -140,8 +140,8 @@ extension IslandTab: CaseIterable {
         case .comunicazioni: return T("Messaggi", "Comms")
         case .file: return "File"
         case .musica: return T("In ascolto", "Now Playing")
-        case .riunioni: return T("Riunioni", "Meetings")
-        case .notion: return "Notion"
+        case .riunioni: return T("Calendario", "Calendar")
+        case .notion: return T("Da fare", "To-do")      // 29/10: the Notion tab became To-do (isola-todo.swift)
         }
     }
     var simbolo: (vuoto: String, pieno: String) {
@@ -152,8 +152,8 @@ extension IslandTab: CaseIterable {
         case .comunicazioni: return ("bubble.left.and.bubble.right", "bubble.left.and.bubble.right.fill")
         case .file: return ("folder", "folder.fill")
         case .musica: return ("music.note", "music.note")
-        case .riunioni: return ("video", "video.fill")
-        case .notion: return ("n.square", "n.square.fill")
+        case .riunioni: return ("calendar", "calendar")
+        case .notion: return ("checklist", "checklist")
         }
     }
 }
@@ -508,7 +508,7 @@ struct IslandPanelContent: View {
                 Spacer().frame(height: model.notchHeight + 8)
                 EmailCard(bozza: e) { model.email = nil }.id(ObjectIdentifier(e))
                     .frame(height: EmailCard.altezza).padding(.horizontal, 20).padding(.bottom, 10)
-            } else if model.dropHover || model.dropNote != nil {
+            } else if (model.dropHover || model.dropNote != nil) && model.tab != .file {     // 29/10: Files takes its own drops
                 Spacer().frame(height: model.notchHeight + 8)
                 if model.dropHover && model.dropNote == nil && MutaCentro.shared.mostraTessere {
                     // 19/10: Muta, le tessere della bozza A; in fondo alla fila il posto di prima
@@ -539,10 +539,10 @@ struct IslandPanelContent: View {
                         Group {
                             switch model.tab {
                             case .comunicazioni: CommsTab()
-                            case .file: FilesTab()
+                            case .file: FilesTab(trascina: model.dropHover)
                             case .musica: MusicTab(media: model.home as? MediaSource, dial: model.dial?.store)
                             case .riunioni: MeetingsTab()
-                            default: NotionTab()
+                            default: TodoTab(model: model)
                             }
                         }
                         .frame(height: model.altezzaContenuto)
