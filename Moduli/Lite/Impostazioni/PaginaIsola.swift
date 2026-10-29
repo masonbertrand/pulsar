@@ -32,6 +32,10 @@ struct PaginaIsola: View {
                             RigaInterruttore(T("Apri quando il mouse si ferma sul notch", "Open when the mouse rests on the notch"),
                                              valore: { IslandModule.apriPassando }) { IslandModule.apriPassando = $0 }
                         }
+                        // 29/10: order and show or hide the tabs (also by dragging them in the island's bar)
+                        GruppoImpostazioni(T("Schede", "Tabs")) {
+                            if let m = Self.i?.model { RigheSchede(model: m) }
+                        }
                         GruppoImpostazioni(T("Nell'isola", "In the island")) {
                             RigaInterruttore(T("YouTube nell'isola", "YouTube in the island"), valore: { BrowserMediaSource.enabled }) { BrowserMediaSource.enabled = $0 }
                             RigaInterruttore(T("Testi dalla rete (LRCLIB)", "Lyrics from the web (LRCLIB)"), valore: { MediaSource.lyricsEnabled }) { MediaSource.lyricsEnabled = $0 }
@@ -67,5 +71,44 @@ struct PaginaIsola: View {
                 } }
             }
         }
+    }
+}
+
+/// 29/10: one row per tab: move it up or down, show or hide it. Home always stays.
+private struct RigheSchede: View {
+    @ObservedObject var model: IslandModel
+    @Environment(\.matte) private var m
+
+    var body: some View {
+        VStack(spacing: 6) {
+            ForEach(Array(model.ordineSchede.enumerated()), id: \.element) { i, t in
+                HStack(spacing: 10) {
+                    Image(systemName: t.simbolo.vuoto).font(.system(size: 12)).foregroundStyle(m.t2).frame(width: 20)
+                    Text(t.nome).font(.system(size: MisureImpostazioni.testo)).foregroundStyle(m.t1)
+                    Spacer()
+                    freccia("chevron.up", T("Sposta su", "Move up"), spento: i == 0) { model.spostaInOrdine(t, di: -1) }
+                    freccia("chevron.down", T("Sposta giù", "Move down"), spento: i == model.ordineSchede.count - 1) { model.spostaInOrdine(t, di: 1) }
+                    Toggle("", isOn: Binding(get: { !model.schedeNascoste.contains(t) },
+                                             set: { v in if v { model.schedeNascoste.remove(t) } else { model.nascondi(t) } }))
+                        .toggleStyle(.switch).labelsHidden().controlSize(.small).disabled(t == .casa)
+                }
+                .frame(height: 26)
+            }
+            HStack {
+                Spacer()
+                TastoImpostazioni(T("Ordine originale", "Restore default order")) {
+                    model.ordineSchede = IslandTab.allCases; model.schedeNascoste = []
+                }
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    private func freccia(_ s: String, _ nome: String, spento: Bool, _ a: @escaping () -> Void) -> some View {
+        Button(action: a) {
+            Image(systemName: s).font(.system(size: 10.5, weight: .semibold)).foregroundStyle(spento ? m.t1.opacity(0.25) : m.t1)
+                .frame(width: 24, height: 24).background(Circle().fill(m.t1.opacity(0.07))).contentShape(Circle())
+        }
+        .buttonStyle(.plain).disabled(spento).help(nome)
     }
 }

@@ -27,7 +27,7 @@ struct CasaSchede: View {
     var body: some View {
         HStack(spacing: 8) {
             Group {
-                if let st = model.agent { SchedaClaude(store: st) } else { SchedaClaude(store: nil) }
+                if let st = model.agent { SchedaClaude(store: st, apri: { model.tab = .claude }) } else { SchedaClaude(store: nil, apri: { model.tab = .claude }) }
             }
             .onTapGesture { model.tab = .claude }          // 28/10: Claude has its own tab now
             .hint(T("Apri Claude", "Open Claude"))
@@ -38,12 +38,14 @@ struct CasaSchede: View {
 }
 
 /// The shared shape of the three cards.
-private struct Scheda<Accessorio: View>: View {
+private struct Scheda<Accessorio: View, Piede: View>: View {
     let titolo: String
     let grande: String
     let sotto: String
     let colori: [Color]
     @ViewBuilder var accessorio: () -> Accessorio
+    /// 29/10: a row of controls along the bottom of the card.
+    @ViewBuilder var piede: () -> Piede
 
     var body: some View {
         let chiaro = Theme.light
@@ -56,6 +58,7 @@ private struct Scheda<Accessorio: View>: View {
             Spacer(minLength: 4)
             Text(grande).font(.system(size: 30, weight: .bold)).lineLimit(1).minimumScaleFactor(0.55)
             Text(sotto).font(.system(size: 12.5)).opacity(0.75).lineLimit(1)
+            piede().padding(.top, 8)
         }
         .foregroundStyle(chiaro ? Color.black.opacity(0.85) : Color.white)
         .padding(16)
@@ -74,6 +77,35 @@ private struct Scheda<Accessorio: View>: View {
             .shadow(color: colori[1].opacity(chiaro ? 0.3 : 0.5), radius: 14, y: 6)
         }
         .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+}
+
+extension Scheda where Piede == EmptyView {
+    init(titolo: String, grande: String, sotto: String, colori: [Color], @ViewBuilder accessorio: @escaping () -> Accessorio) {
+        self.init(titolo: titolo, grande: grande, sotto: sotto, colori: colori, accessorio: accessorio, piede: { EmptyView() })
+    }
+}
+
+/// 29/10: a small control in a card's bottom row; `forte` is the main one (filled).
+private struct Pillola: View {
+    let simbolo: String
+    var testo: String? = nil
+    var forte = false
+    let nome: String
+    let azione: () -> Void
+    var body: some View {
+        let chiaro = Theme.light
+        Button(action: azione) {
+            HStack(spacing: 5) {
+                Image(systemName: simbolo).font(.system(size: 11, weight: .semibold))
+                if let testo { Text(testo).font(.system(size: 11.5, weight: .medium)).lineLimit(1) }
+            }
+            .foregroundStyle(forte ? (chiaro ? Color.white : Color.black.opacity(0.85)) : (chiaro ? Color.black.opacity(0.8) : Color.white))
+            .padding(.horizontal, testo == nil ? 0 : 10).frame(minWidth: 28).frame(height: 26)
+            .background(Capsule().fill(forte ? (chiaro ? Color.black.opacity(0.8) : Color.white) : (chiaro ? Color.black.opacity(0.08) : Color.white.opacity(0.15))))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain).hint(nome)
     }
 }
 
@@ -101,12 +133,15 @@ private struct Tondo: View {
 
 private struct SchedaClaude: View {
     var store: AgentStore?
+    let apri: () -> Void
     var body: some View {
-        if let store { Viva(store: store) } else { scheda(oggi: 0, finiti: 0, riga: T("lavori oggi", "jobs today")) }
+        if let store { Viva(store: store, apri: apri) }
+        else { Self.scheda(oggi: 0, finiti: 0, riga: T("lavori oggi", "jobs today"), store: nil, apri: apri) }
     }
 
     private struct Viva: View {
         @ObservedObject var store: AgentStore
+        let apri: () -> Void
         var body: some View {
             let inizio = Calendar.current.startOfDay(for: Date()).timeIntervalSince1970
             let oggi = store.sessions.filter { $0.started >= inizio }
@@ -119,13 +154,11 @@ private struct SchedaClaude: View {
                 }
                 return oggi.count == 1 ? T("lavoro oggi", "job today") : T("lavori oggi", "jobs today")
             }()
-            SchedaClaude.scheda(oggi: oggi.count, finiti: finiti, riga: riga)
+            SchedaClaude.scheda(oggi: oggi.count, finiti: finiti, riga: riga, store: store, apri: apri)
         }
     }
 
-    fileprivate func scheda(oggi: Int, finiti: Int, riga: String) -> some View { Self.scheda(oggi: oggi, finiti: finiti, riga: riga) }
-
-    static func scheda(oggi: Int, finiti: Int, riga: String) -> some View {
+    static func scheda(oggi: Int, finiti: Int, riga: String, store: AgentStore?, apri: @escaping () -> Void) -> some View {
         let quota = oggi == 0 ? 0 : Double(finiti) / Double(oggi)
         return Scheda(titolo: "Claude Code", grande: "\(oggi)", sotto: riga, colori: CasaColori.claude(Theme.light)) {
             ZStack {
@@ -136,6 +169,21 @@ private struct SchedaClaude: View {
             }
             .frame(width: 40, height: 40)
             .hint(T("Lavori di oggi finiti", "Today's jobs finished"))
+        } piede: {
+            HStack(spacing: 6) {
+                if let s = store, s.hasPending {
+                    // answer Claude's permission right here
+                    Pillola(simbolo: "xmark", testo: T("Nega", "Deny"), nome: T("Nega il permesso", "Deny")) { s.answer(false) }
+                    Pillola(simbolo: "checkmark", testo: T("Consenti", "Allow"), forte: true, nome: T("Consenti", "Allow")) { s.answer(true) }
+                } else if store?.question != nil {
+                    Pillola(simbolo: "bubble.left", testo: T("Rispondi", "Answer"), forte: true, nome: T("Rispondi a Claude", "Answer Claude"), azione: apri)
+                } else {
+                    Pillola(simbolo: "asterisk", testo: T("Apri", "Open"), nome: T("Apri la scheda Claude", "Open the Claude tab"), azione: apri)
+                    Pillola(simbolo: "terminal", testo: "Terminal", nome: T("Apri il Terminale", "Open Terminal")) {
+                        ApriApp.apri(bundle: "com.apple.Terminal", nome: "Terminal")
+                    }
+                }
+            }
         }
     }
 }
@@ -164,14 +212,16 @@ private struct SchedaMusica: View {
                    grande: t?.title ?? "Spotify",
                    sotto: t.map { $0.artist.isEmpty ? $0.app : $0.artist } ?? T("Apri la tua musica", "Open your music"),
                    colori: CasaColori.musica(Theme.light)) {
-                HStack(spacing: 4) {
-                    if t != nil {
-                        Tondo(simbolo: "forward.fill", nome: T("Successivo", "Next")) { media.command(.next) }
+                Tondo(simbolo: "arrow.up.forward.app", nome: T("Apri \(t?.app ?? "Spotify")", "Open \(t?.app ?? "Spotify")")) { SchedaMusica.apri(t?.app) }
+            } piede: {
+                let live = media.track != nil
+                HStack(spacing: 6) {
+                    Pillola(simbolo: "backward.fill", nome: T("Precedente", "Previous")) { media.command(.previous) }.disabled(!live)
+                    Pillola(simbolo: suona ? "pause.fill" : "play.fill", forte: true, nome: suona ? T("Pausa", "Pause") : T("Riproduci", "Play")) {
+                        live ? media.command(.playPause) : media.resumeLast()
                     }
-                    Tondo(simbolo: t == nil ? "music.note" : suona ? "pause.fill" : "play.fill",
-                          nome: t == nil ? T("Apri Spotify", "Open Spotify") : suona ? T("Pausa", "Pause") : T("Riproduci", "Play")) {
-                        if t == nil { SchedaMusica.apri(nil) } else { media.command(.playPause) }
-                    }
+                    Pillola(simbolo: "forward.fill", nome: T("Successivo", "Next")) { media.command(.next) }.disabled(!live)
+                    Pillola(simbolo: "shuffle", nome: T("Casuale", "Shuffle")) { media.command(.shuffle) }.disabled(!live)
                 }
             }
             .onTapGesture { SchedaMusica.apri(t?.app) }
@@ -200,10 +250,24 @@ private struct SchedaFocus: View {
                    colori: CasaColori.focus(Theme.light)) {
                 Tondo(simbolo: resto == nil ? "play.fill" : "stop.fill", pieno: true, colore: CasaColori.viola,
                       nome: resto == nil ? T("Avvia \(store.timerMinutes) minuti", "Start \(store.timerMinutes) minutes") : T("Ferma", "Stop")) { avvia() }
+            } piede: {
+                HStack(spacing: 6) {
+                    Pillola(simbolo: "minus", nome: T("5 minuti in meno", "5 minutes less")) { durata(-5) }.disabled(resto != nil)
+                    Pillola(simbolo: "plus", nome: T("5 minuti in più", "5 minutes more")) { durata(5) }.disabled(resto != nil)
+                    Pillola(simbolo: "calendar.badge.plus", testo: T("Blocca", "Block"),
+                            nome: T("Metti \(store.timerMinutes) minuti di focus nel calendario", "Put \(store.timerMinutes) min of focus in your calendar")) {
+                        CalendarModel.shared.bloccaFocus(minuti: store.timerMinutes)
+                    }
+                }
             }
             .onTapGesture { avvia() }
             .hint(resto == nil ? T("Avvia il focus", "Start focusing") : T("Ferma il focus", "Stop focusing"))
         }
+    }
+
+    private func durata(_ d: Int) {
+        store.timerMinutes = max(5, min(120, store.timerMinutes + d))
+        Impostazioni.set(store.timerMinutes, .dialTimer)
     }
 
     private func avvia() {

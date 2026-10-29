@@ -121,6 +121,13 @@ final class IslandModel: ObservableObject {
         withAnimation(.easeInOut(duration: 0.2)) { ordineSchede = nuovo.compactMap { k in IslandTab.allCases.first { $0.chiave == k } } }
     }
 
+    /// Moves a tab within the whole order (Settings → Island → Tabs).
+    func spostaInOrdine(_ t: IslandTab, di: Int) {
+        guard let i = ordineSchede.firstIndex(of: t) else { return }
+        let nuovo = OrdineSchede.sposta(ordineSchede.map(\.chiave), t.chiave, a: i + di)
+        ordineSchede = nuovo.compactMap { k in IslandTab.allCases.first { $0.chiave == k } }
+    }
+
     func nascondi(_ t: IslandTab) {
         guard t != .casa else { return }
         schedeNascoste.insert(t)

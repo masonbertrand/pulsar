@@ -172,6 +172,8 @@ final class DialStore: ObservableObject {
     @Published var volume: Float = SystemVolume.level
     @Published var muted: Bool = SystemVolume.muted
     @Published var apps: [MixApp] = []
+    /// 29/10: every app with audio open, playing or paused (Spotify in pause too), playing ones first. For Now Playing's mixer.
+    @Published var tutte: [MixApp] = []
     @Published var gains: [String: Float] = (Impostazioni.dictionary(.dialGains) as? [String: Float]) ?? [:]
     @Published var linked: Set<String> = Set(Impostazioni.stringArray(.dialLinked) ?? [])
     @Published var tapError = false
@@ -277,6 +279,8 @@ final class DialStore: ObservableObject {
             .filter { $0.playing || gain($0.id) != 1 || taps[$0.id] != nil }
             .sorted { ($0.playing ? 0 : 1, $0.name.lowercased()) < ($1.playing ? 0 : 1, $1.name.lowercased()) }
         if shown != apps { apps = shown }
+        let ordinate = groups.values.sorted { ($0.playing ? 0 : 1, $0.name.lowercased()) < ($1.playing ? 0 : 1, $1.name.lowercased()) }
+        if ordinate != tutte { tutte = ordinate }
         applyTaps(groups)
     }
 
