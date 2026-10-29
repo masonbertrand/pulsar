@@ -223,7 +223,7 @@ final class DialStore: ObservableObject {
     private func tick() {
         if let end = timerEnd {
             now = Date()
-            if now >= end { timerEnd = nil; onTimerDone?() }
+            if now >= end { timerEnd = nil; FocusStats.shared.registra(minuti: timerMinutes); onTimerDone?() }   // 29/10: Focus Stats tile
         }
         refresh()
     }

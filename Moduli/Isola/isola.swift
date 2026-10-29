@@ -481,6 +481,9 @@ final class IslandModule {
         model.widgets.append(LanciatoriWidget()) // 24/10: i Lanciatori, nella Lite dal 24/10 sera (Moduli/Lanciatori)
         // 29/10: World Clock, Keep Awake, Screenshot, Color Picker, Scratchpad, Network (widget-nuove.swift)
         model.widgets += [WorldClockWidget(), KeepAwakeWidget(), ScreenshotWidget(), ColorPickerWidget(), ScratchpadWidget(), NetworkWidget()]
+        // 29/10: Bluetooth Battery, Snippets, Focus Stats, Stocks, Shortcuts, VPN, Countdown, Habits (widget-nuove2.swift)
+        model.widgets += [BluetoothBatteryWidget(), SnippetsWidget(), FocusStatsWidget(dial: dialStore), StocksWidget(), ShortcutsWidget(),
+                          VPNWidget(), CountdownWidget(), HabitsWidget()]
         // 12/10 sera: una volta sola, le tessere nuove che contano di più entrano nella riga (le altre dai chip)
         // 12/10 tarda sera, l'autore: "meteo non ha senso così largo", "Spotify riempi la sezione": meteo 2 celle, musica 3
         if !Impostazioni.bool(.isolaMeteoStretto) {
