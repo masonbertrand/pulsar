@@ -7,6 +7,8 @@ import AppKit
 enum MediaCommand {
     case playPause, next, previous
     case seek(Double)
+    case shuffle, repeatMode        // 29/10: toggles, for the Now Playing tab
+    case skip(Double)               // 29/10: seconds forward (negative: back)
 }
 
 final class MediaSource: ObservableObject, IslandSource {
@@ -124,6 +126,14 @@ final class MediaSource: ObservableObject, IslandSource {
         case .next:      src = "tell application \"\(app)\" to next track"
         case .previous:  src = "tell application \"\(app)\" to previous track"
         case .seek(let s): src = "tell application \"\(app)\" to set player position to \(max(0, s))"
+        case .skip(let d): src = "tell application \"\(app)\" to set player position to ((player position) + (\(d)))"
+        case .shuffle:
+            src = app == "Music" ? "tell application \"Music\" to set shuffle enabled to not shuffle enabled"
+                                 : "tell application \"Spotify\" to set shuffling to not shuffling"
+        case .repeatMode:
+            src = app == "Music"
+                ? "tell application \"Music\"\nif song repeat is off then\nset song repeat to all\nelse\nset song repeat to off\nend if\nend tell"
+                : "tell application \"Spotify\" to set repeating to not repeating"
         }
         queue.async {
             var err: NSDictionary?

@@ -336,7 +336,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!      // icona principale con il menu
     private var separatorItem: NSStatusItem!   // separatore: si allarga per nascondere ciò che ha a sinistra
     private var mainMenu: NSMenu!              // tenuto da parte: assegnato all'item solo per il click sinistro
-    private var caffeinate: Process?
     private var sounds: KeySounds!
     private let agent = AgentModule()
     private let isola = IslandModule()
@@ -432,7 +431,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        caffeinate?.terminate()
+        TieniSveglio.shared.ferma()      // 29/10: shared with the Keep Awake tile (widget-nuove.swift)
         agent.store.stop()   // senza battito l'hook smette di aspettare la pillola
         dial.stop()          // chiude i tap: le app tornano a suonare da sole
     }
@@ -514,7 +513,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             QuickTile(symbol: PulsarTema.attuale.chiaro ? "sun.max.fill" : "moon.fill", title: PulsarTema.attuale.title, on: true,
                       act: close { [weak self] in self?.bloccatoOppure("temi") { self?.agent.cycleMode() } }),
             QuickTile(symbol: "moon.zzz.fill", title: T("Non disturbare", "Do Not Disturb"), on: SystemStatus.shared.focus, act: close { [weak self] in self?.toggleDND() }),
-            QuickTile(symbol: "cup.and.saucer.fill", title: "Keep Awake", on: caffeinate?.isRunning == true, act: close { [weak self] in self?.toggleKeepAwake() }),
+            QuickTile(symbol: "cup.and.saucer.fill", title: "Keep Awake", on: TieniSveglio.shared.attivo, act: close { [weak self] in self?.toggleKeepAwake() }),
             QuickTile(symbol: "speaker.slash.fill", title: T("Muto", "Mute"), on: SystemState.muted, act: close { [weak self] in self?.toggleMute() }),
         ]
         // 19/10 sera: Isola, Voce e Claude non stanno più qui ma nella fila "Pezzi di Pulsar", con tutti gli altri pezzi.
@@ -639,7 +638,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(toggle("Dark Mode", symbol: "moon.fill", on: SystemState.darkMode, #selector(toggleDarkMode)))
         menu.addItem(toggle(T("Nascondi icone desktop", "Hide desktop icons"), symbol: "menubar.dock.rectangle", on: SystemState.desktopIconsHidden, #selector(toggleDesktopIcons)))
         menu.addItem(toggle(T("Mostra file nascosti", "Show hidden files"), symbol: "eye.fill", on: SystemState.hiddenFilesShown, #selector(toggleHiddenFiles)))
-        menu.addItem(toggle("Keep Awake", symbol: "cup.and.saucer.fill", on: caffeinate?.isRunning == true, #selector(toggleKeepAwake)))
+        menu.addItem(toggle("Keep Awake", symbol: "cup.and.saucer.fill", on: TieniSveglio.shared.attivo, #selector(toggleKeepAwake)))
         menu.addItem(toggle(T("Muto", "Mute"), symbol: "speaker.slash.fill", on: SystemState.muted, #selector(toggleMute)))
         menu.addItem(toggle("Stage Manager", symbol: "squares.leading.rectangle", on: SystemState.stageManager, #selector(toggleStageManager)))
         menu.addItem(toggle(T("Non disturbare", "Do Not Disturb"), symbol: "moon.zzz.fill", on: false, #selector(toggleDND)))
@@ -917,18 +916,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         shell("/usr/bin/killall", ["Finder"])
     }
 
-    @objc private func toggleKeepAwake() {
-        if let p = caffeinate, p.isRunning {
-            p.terminate()
-            caffeinate = nil
-        } else {
-            let p = Process()
-            p.executableURL = URL(fileURLWithPath: "/usr/bin/caffeinate")
-            p.arguments = ["-di"] // display + idle sleep bloccati finché Pulsar non lo spegne
-            try? p.run()
-            caffeinate = p
-        }
-    }
+    @objc private func toggleKeepAwake() { TieniSveglio.shared.cambia() }
 
     @objc private func toggleMute() {
         shell("/usr/bin/osascript", ["-e", "set volume output muted (not (output muted of (get volume settings)))"])

@@ -74,6 +74,20 @@ enum Chiave: String, CaseIterable {
     case isolaTilesLavoro   // 27/10: the Work tab's tiles (the tab became Communications on 28/10)
     case notionPagine       // 28/10: pages pinned to the Notion tab, as JSON
     case isolaApriPassando  // 28/10: the island opens when the mouse rests on the notch (on by default); off = click only
+    case orologiFusi        // 29/10: World Clock tile, time zone ids separated by commas
+    case coloriRecenti      // 29/10: Color Picker tile, recent hex codes separated by commas
+    case notaRapida         // 29/10: Scratchpad tile text
+    case isolaOrdineSchede  // 29/10: the island's tabs in the user's order, comma separated
+    case isolaSchedeNascoste // 29/10: tabs the user hid, comma separated
+    case frasiPronte        // 29/10: Snippets tile, JSON list of texts
+    case focusMinuti        // 29/10: Focus Stats, minutes per day ("yyyy-MM-dd")
+    case focusSessioni      // 29/10: Focus Stats, finished timers per day
+    case quoteSimboli       // 29/10: Stocks tile, Yahoo Finance symbols, comma separated
+    case comandiFissati     // 29/10: Shortcuts tile, pinned shortcut names, one per line
+    case contoNome          // 29/10: Countdown tile, what it counts to
+    case contoData          // 29/10: Countdown tile, the date (seconds since 1970)
+    case abitudiniNomi      // 29/10: Habits tile, names, comma separated
+    case abitudiniFatte     // 29/10: Habits tile, name → days done
     case isolaTray
     case isolaUltimoBrano
     case isolaWAChat

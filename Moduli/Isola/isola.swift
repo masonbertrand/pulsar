@@ -99,6 +99,34 @@ final class IslandModel: ObservableObject {
     // prima restava della misura vecchia per qualche secondo e la Casa copriva le icone in alto.
     /// 24/10: anteprima della Casa a freddo anche mentre Claude lavora (pulsar://isola?freddo=1, freddo=0 la toglie)
     @Published var anteprimaFredda = false { didSet { if anteprimaFredda != oldValue { DispatchQueue.main.async { self.dropChanged?() } } } }
+    /// 29/10: the tabs in the user's order (drag them in the bar, or right-click to move or hide), saved in settings.
+    @Published var ordineSchede: [IslandTab] = IslandModel.leggiOrdine() {
+        didSet { Impostazioni.set(ordineSchede.map(\.chiave).joined(separator: ","), .isolaOrdineSchede) }
+    }
+    @Published var schedeNascoste: Set<IslandTab> = Set((Impostazioni.string(.isolaSchedeNascoste) ?? "").split(separator: ",")
+        .compactMap { k in IslandTab.allCases.first { $0.chiave == k } }) {
+        didSet { Impostazioni.set(schedeNascoste.map(\.chiave).sorted().joined(separator: ","), .isolaSchedeNascoste) }
+    }
+    var schedeVisibili: [IslandTab] { ordineSchede.filter { !schedeNascoste.contains($0) } }
+
+    static func leggiOrdine() -> [IslandTab] {
+        OrdineSchede.leggi(Impostazioni.string(.isolaOrdineSchede), tutte: IslandTab.allCases.map(\.chiave))
+            .compactMap { k in IslandTab.allCases.first { $0.chiave == k } }
+    }
+
+    /// Moves a tab to position `a` among the visible ones; hidden tabs keep their place at the end.
+    func spostaScheda(_ t: IslandTab, a: Int) {
+        let visibili = OrdineSchede.sposta(schedeVisibili.map(\.chiave), t.chiave, a: a)
+        let nuovo = visibili + ordineSchede.filter { schedeNascoste.contains($0) }.map(\.chiave)
+        withAnimation(.easeInOut(duration: 0.2)) { ordineSchede = nuovo.compactMap { k in IslandTab.allCases.first { $0.chiave == k } } }
+    }
+
+    func nascondi(_ t: IslandTab) {
+        guard t != .casa else { return }
+        schedeNascoste.insert(t)
+        if tab == t { tab = .casa }
+    }
+
     /// 28/10: the height every tab's content gets (the tallest of them), set by the island's layout.
     @Published var altezzaContenuto: CGFloat = 196
     /// Does this source take over the panel with its own view? Claude's alerts don't on the Claude tab,
@@ -187,7 +215,7 @@ struct IslandView: View {
                 Color.clear
             case .peek:
                 if let p = model.peek {
-                    PeekView(item: p, notchHeight: model.notchHeight)
+                    PeekView(item: p, notchHeight: model.notchHeight, notchWidth: model.notchWidth)
                         .id(p.key + p.title + p.detail)
                         .transition(.opacity.combined(with: .offset(y: -6)))
                 }
@@ -451,6 +479,11 @@ final class IslandModule {
                          ControlsWidget(model: model), PowerWidget(), StatsWidget()]
         model.widgets += [ClockWidget(), MonthWidget(), SunWidget()]   // 14/10: da LaunchMe, forme Braun (widget-braun.swift)
         model.widgets.append(LanciatoriWidget()) // 24/10: i Lanciatori, nella Lite dal 24/10 sera (Moduli/Lanciatori)
+        // 29/10: World Clock, Keep Awake, Screenshot, Color Picker, Scratchpad, Network (widget-nuove.swift)
+        model.widgets += [WorldClockWidget(), KeepAwakeWidget(), ScreenshotWidget(), ColorPickerWidget(), ScratchpadWidget(), NetworkWidget()]
+        // 29/10: Bluetooth Battery, Snippets, Focus Stats, Stocks, Shortcuts, VPN, Countdown, Habits (widget-nuove2.swift)
+        model.widgets += [BluetoothBatteryWidget(), SnippetsWidget(), FocusStatsWidget(dial: dialStore), StocksWidget(), ShortcutsWidget(),
+                          VPNWidget(), CountdownWidget(), HabitsWidget()]
         // 12/10 sera: una volta sola, le tessere nuove che contano di più entrano nella riga (le altre dai chip)
         // 12/10 tarda sera, l'autore: "meteo non ha senso così largo", "Spotify riempi la sezione": meteo 2 celle, musica 3
         if !Impostazioni.bool(.isolaMeteoStretto) {
@@ -727,7 +760,9 @@ final class IslandModule {
         switch state {
         case .rest:     w = notch.width + 20;                h = notch.height
         case .compact:  w = notch.width + 2 * wing + 20;     h = notch.height
-        case .peek:     w = peekItem.map { PeekView.width($0, notch: notch.width) } ?? notch.width + 20; h = notch.height + 28
+        case .peek:     w = peekItem.map { PeekView.width($0, notch: notch.width) } ?? notch.width + 20
+                        // 29/10: notifications stay in the menu bar band beside the notch, nothing hangs below it
+                        h = notch.height + ((peekItem.map(PeekView.nelMenu) ?? false) ? 0 : 28)
         case .expanded, .alert:
             // 17/10 sera: pannello attaccato al bordo alto, testa nella fascia del notch: notch + 8 + tessera + 10
             if scrive { w = 600; h = notch.height + 8 + EmailCard.altezza + 10 }
