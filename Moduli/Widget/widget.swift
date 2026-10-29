@@ -23,6 +23,51 @@ extension Livello {
     }
 }
 
+/// 29/10, the user: "if something needs a connection or permission, I should be able to click and it takes me there".
+enum Permesso2 {
+    case calendario, accessibilita, automazione, registrazioneSchermo, audio
+
+    var pagina: String {
+        switch self {
+        case .calendario: return "Privacy_Calendars"
+        case .accessibilita: return "Privacy_Accessibility"
+        case .automazione: return "Privacy_Automation"
+        case .registrazioneSchermo: return "Privacy_ScreenCapture"
+        case .audio: return "Privacy_AudioCapture"
+        }
+    }
+
+    /// Asks macOS when it never asked (calendar); otherwise opens the right page of Privacy & Security.
+    func risolvi() {
+        if self == .calendario, EKEventStore.authorizationStatus(for: .event) == .notDetermined { CalendarModel.shared.refresh(); return }
+        TileOpen.url("x-apple.systempreferences:com.apple.preference.security?\(pagina)")
+    }
+}
+
+/// A warning you can click to fix: amber text with a lock, which opens the setting it needs.
+struct PermessoLink: View {
+    let testo: String
+    let permesso: Permesso2
+    var size: CGFloat = 11.5
+    var body: some View {
+        Button { permesso.risolvi() } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "lock.open").font(.system(size: size - 1.5, weight: .semibold))
+                Text(testo).font(.system(size: size)).underline().lineLimit(2).multilineTextAlignment(.leading)
+            }
+            .foregroundStyle(Night.amber).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .hint(T("Apri le Impostazioni per consentirlo", "Open Settings to allow it"))
+    }
+}
+
+/// 29/10: download in green, upload in orange, like most network monitors.
+enum ColoriRete {
+    static var giu: Color { Theme.light ? Color(red: 0.16, green: 0.58, blue: 0.30) : Color(red: 0.42, green: 0.84, blue: 0.52) }
+    static var su: Color { Theme.light ? Color(red: 0.85, green: 0.45, blue: 0.10) : Color(red: 1.0, green: 0.62, blue: 0.30) }
+}
+
 /// 28/10: the small round button in a tile's corner.
 struct TileCornerButton: View {
     let symbol: String
@@ -659,6 +704,22 @@ final class CalendarModel: ObservableObject {
         if riunione != prossimaRiunione { prossimaRiunione = riunione }
     }
 
+    /// 29/10: a day's events for the Calendar tab, all-day first then by time. Empty without access.
+    func eventi(giorno: Date) -> [Next] {
+        guard !demo, EKEventStore.authorizationStatus(for: .event) == .fullAccess else { return [] }
+        let cal = Calendar.current, inizio = cal.startOfDay(for: giorno)
+        guard let fine = cal.date(byAdding: .day, value: 1, to: inizio) else { return [] }
+        return store.events(matching: store.predicateForEvents(withStart: inizio, end: fine, calendars: nil))
+            .filter { $0.status != .canceled }
+            .sorted { $0.isAllDay != $1.isAllDay ? $0.isAllDay : $0.startDate < $1.startDate }
+            .map(Self.voce)
+    }
+
+    /// How many events each of `n` days from `da` has, for the week strip.
+    func conteggi(da: Date, n: Int) -> [Int] {
+        (0..<n).map { k in eventi(giorno: Calendar.current.date(byAdding: .day, value: k, to: da) ?? da).count }
+    }
+
     /// 29/10: a "Focus" block in the default calendar, from now for `minuti`. False without calendar access.
     @discardableResult
     func bloccaFocus(minuti: Int) -> Bool {
@@ -733,7 +794,7 @@ private struct CalendarTile: View {
                 if cells > 1 {
                     VStack(alignment: .leading, spacing: 2) {
                         if model.denied {
-                            Text(T("Consenti il Calendario", "Allow Calendar")).font(.system(size: 11)).foregroundStyle(Night.amber)
+                            PermessoLink(testo: T("Consenti il Calendario", "Allow Calendar"), permesso: .calendario, size: 11)
                         } else if let n = model.next {
                             let quando = n.allDay ? T("Tutto il giorno", "All day") : "\(Self.hour.string(from: n.start)) - \(Self.hour.string(from: n.end))"
                             let giorno = ProssimoEvento.giorno(n.start, ora: date, inglese: !pulsarItalian)

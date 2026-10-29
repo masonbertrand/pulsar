@@ -74,3 +74,60 @@ enum OrdineSchede {
         return o
     }
 }
+
+/// 29/10: the To-do tab's Notion tasks: reading a database query, which property marks a task done, and the database id.
+enum NotionTasks {
+    struct Compito: Equatable { var id: String; var titolo: String; var fatto: Bool; var scadenza: String?; var url: String? }
+    /// How the database says "done": a checkbox, or a status whose option name means done.
+    enum Fatto: Equatable { case casella(String), stato(String, opzione: String), nessuno }
+    struct Schema: Equatable { var titolo: String; var fatto: Fatto }
+
+    static let parolaFatto = ["done", "complete", "completed", "finished", "fatto", "completato"]
+
+    /// The 32-hex id in a Notion database link (with or without dashes); nil if there isn't one.
+    static func idDatabase(_ link: String) -> String? {
+        let pulito = link.split(separator: "?").first.map(String.init) ?? link
+        let hex = pulito.replacingOccurrences(of: "-", with: "")
+        var corrente = ""
+        var migliore: String?
+        for c in hex {
+            if c.isHexDigit { corrente.append(c); if corrente.count >= 32 { migliore = String(corrente.suffix(32)) } }
+            else { corrente = "" }
+        }
+        return migliore?.lowercased()
+    }
+
+    /// From GET /v1/databases/{id}: the title property, and a done checkbox or status (with its "done" option).
+    static func schema(_ d: Data) -> Schema? {
+        guard let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any], let p = j["properties"] as? [String: [String: Any]] else { return nil }
+        guard let titolo = p.first(where: { $0.value["type"] as? String == "title" })?.key else { return nil }
+        let caselle = p.filter { $0.value["type"] as? String == "checkbox" }.map(\.key).sorted()
+        if let c = caselle.first(where: { parolaFatto.contains($0.lowercased()) }) ?? caselle.first {
+            return Schema(titolo: titolo, fatto: .casella(c))
+        }
+        if let e = p.first(where: { $0.value["type"] as? String == "status" }),
+           let opzioni = (e.value["status"] as? [String: Any])?["options"] as? [[String: Any]] {
+            let nomi = opzioni.compactMap { $0["name"] as? String }
+            let ok = nomi.first { parolaFatto.contains($0.lowercased()) } ?? nomi.last
+            if let ok { return Schema(titolo: titolo, fatto: .stato(e.key, opzione: ok)) }
+        }
+        return Schema(titolo: titolo, fatto: .nessuno)
+    }
+
+    /// From POST /v1/databases/{id}/query: the tasks, done or not, as the schema reads them.
+    static func compiti(_ d: Data, schema: Schema) -> [Compito] {
+        guard let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any], let r = j["results"] as? [[String: Any]] else { return [] }
+        return r.compactMap { pagina in
+            guard let id = pagina["id"] as? String, let p = pagina["properties"] as? [String: [String: Any]] else { return nil }
+            let titolo = (p[schema.titolo]?["title"] as? [[String: Any]] ?? []).compactMap { $0["plain_text"] as? String }.joined()
+            var fatto = false
+            switch schema.fatto {
+            case .casella(let n): fatto = p[n]?["checkbox"] as? Bool ?? false
+            case .stato(let n, let ok): fatto = ((p[n]?["status"] as? [String: Any])?["name"] as? String) == ok
+            case .nessuno: break
+            }
+            let scadenza = p.values.first { $0["type"] as? String == "date" }.flatMap { ($0["date"] as? [String: Any])?["start"] as? String }
+            return Compito(id: id, titolo: titolo.isEmpty ? "Untitled" : titolo, fatto: fatto, scadenza: scadenza, url: pagina["url"] as? String)
+        }
+    }
+}

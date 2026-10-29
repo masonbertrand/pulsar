@@ -130,9 +130,11 @@ struct CommsTab: View {
                     Titoletto(testo: T("Da leggere", "Unread"), destra: tot == 0 ? T("tutto letto", "all caught up") : "\(tot)")
                     let lista = elenco
                     if lista.isEmpty {
-                        Text(AXIsProcessTrusted() ? T("Nessuna app di messaggi nel Dock", "No messaging apps in the Dock")
-                                                  : T("Serve l'Accessibilità (Impostazioni → Permessi)", "Needs Accessibility (Settings → Permissions)"))
-                            .font(.system(size: 12)).foregroundStyle(Volta.t3)
+                        if AXIsProcessTrusted() {
+                            Text(T("Nessuna app di messaggi nel Dock", "No messaging apps in the Dock")).font(.system(size: 12)).foregroundStyle(Volta.t3)
+                        } else {
+                            PermessoLink(testo: T("Consenti l'Accessibilità per leggere i badge", "Allow Accessibility to read unread badges"), permesso: .accessibilita, size: 12)
+                        }
                     }
                     HStack(spacing: 4) { ForEach(lista.prefix(5)) { a in icona(a) } }
                     Spacer(minLength: 0)
@@ -230,6 +232,10 @@ final class DownloadsModel: ObservableObject {
     @Published private(set) var file: [File] = []
     /// The last tidy, to undo it: (where it is now, where it was).
     @Published private(set) var annulla: [(URL, URL)] = []
+    /// 29/10: files dropped on the Files tab, waiting for something to be done with them.
+    @Published var lasciati: [URL] = []
+    /// A short "Done: zipped" after an action.
+    @Published var esito: String?
     private var timer: Timer?
     let cartella = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
 
@@ -288,6 +294,72 @@ final class DownloadsModel: ObservableObject {
         aggiorna()
     }
 
+    // MARK: what you can do with dropped files
+
+    private func fatto(_ testo: String) {
+        esito = testo
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in if self?.esito == testo { self?.esito = nil } }
+    }
+
+    /// Next to the original, without overwriting: "Name 2.ext".
+    private func libero(_ u: URL) -> URL {
+        var v = u, n = 2
+        let base = u.deletingPathExtension().lastPathComponent, ext = u.pathExtension, dir = u.deletingLastPathComponent()
+        while FileManager.default.fileExists(atPath: v.path) { v = dir.appendingPathComponent(ext.isEmpty ? "\(base) \(n)" : "\(base) \(n).\(ext)"); n += 1 }
+        return v
+    }
+
+    func sposta(in cartella: URL, nome: String) {
+        lasciati = lasciati.map { u in
+            let d = libero(cartella.appendingPathComponent(u.lastPathComponent))
+            return (try? FileManager.default.moveItem(at: u, to: d)) != nil ? d : u
+        }
+        fatto(T("Spostato in \(nome)", "Moved to \(nome)"))
+    }
+
+    func comprimi() {
+        let file = lasciati
+        DispatchQueue.global(qos: .userInitiated).async {
+            for u in file {
+                let z = self.libero(u.deletingPathExtension().appendingPathExtension("zip"))
+                _ = SysToggles.run("/usr/bin/ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", u.path, z.path])
+            }
+            DispatchQueue.main.async { self.fatto(T("Compresso in .zip", "Zipped")); self.aggiorna() }
+        }
+    }
+
+    static let immagini: Set<String> = ["png", "jpg", "jpeg", "heic", "tiff", "tif", "gif", "bmp", "webp"]
+    var tuttiImmagini: Bool { !lasciati.isEmpty && lasciati.allSatisfy { Self.immagini.contains($0.pathExtension.lowercased()) } }
+
+    /// Images to JPEG, PNG or PDF with sips (built into macOS), saved next to the originals.
+    func converti(_ formato: String) {
+        let file = lasciati
+        let ext = formato == "jpeg" ? "jpg" : formato
+        DispatchQueue.global(qos: .userInitiated).async {
+            var nuovi: [URL] = []
+            for u in file {
+                let out = self.libero(u.deletingPathExtension().appendingPathExtension(ext))
+                _ = SysToggles.run("/usr/bin/sips", ["-s", "format", formato, u.path, "--out", out.path])
+                if FileManager.default.fileExists(atPath: out.path) { nuovi.append(out) }
+            }
+            DispatchQueue.main.async {
+                if !nuovi.isEmpty { self.lasciati = nuovi }
+                self.fatto(T("Convertito in \(ext.uppercased())", "Converted to \(ext.uppercased())"))
+            }
+        }
+    }
+
+    func copiaPercorsi() {
+        NSPasteboard.general.clearContents(); NSPasteboard.general.setString(lasciati.map(\.path).joined(separator: "\n"), forType: .string)
+        fatto(T("Percorso copiato", "Path copied"))
+    }
+
+    func cestinaLasciati() {
+        for u in lasciati { try? FileManager.default.trashItem(at: u, resultingItemURL: nil) }
+        lasciati = []
+        aggiorna()
+    }
+
     func annullaRiordino() {
         for (ora, prima) in annulla where !FileManager.default.fileExists(atPath: prima.path) { try? FileManager.default.moveItem(at: ora, to: prima) }
         annulla = []
@@ -302,11 +374,85 @@ final class DownloadsModel: ObservableObject {
 }
 
 struct FilesTab: View {
+    /// A file is being dragged over the island.
+    var trascina = false
     @ObservedObject private var dl = DownloadsModel.shared
     @ObservedObject private var tray = TrayModel.shared
 
     var body: some View {
         HStack(spacing: 8) {
+            Group {
+                if !dl.lasciati.isEmpty { lasciati } else { recenti }
+            }
+            .overlay {
+                // 29/10: drop a file here to work with it
+                if trascina {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Volta.a2.opacity(0.18))
+                        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Volta.a2, style: StrokeStyle(lineWidth: 2, dash: [6, 4])))
+                        .overlay(Label(T("Lascia qui per lavorarci", "Drop here to work with it"), systemImage: "arrow.down.doc").font(.system(size: 14, weight: .medium)).foregroundStyle(Volta.t1))
+                }
+            }
+            griglia
+        }
+        .onAppear { dl.guarda(true) }
+        .onDisappear { dl.guarda(false) }
+    }
+
+    /// What can be done with the files just dropped.
+    private var lasciati: some View {
+        VCard(padding: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    if let u = dl.lasciati.first {
+                        Image(nsImage: NSWorkspace.shared.icon(forFile: u.path)).resizable().frame(width: 26, height: 26)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(u.lastPathComponent).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Volta.t1).lineLimit(1).truncationMode(.middle)
+                            Text(dl.esito ?? (dl.lasciati.count > 1 ? T("e altri \(dl.lasciati.count - 1)", "and \(dl.lasciati.count - 1) more") : u.deletingLastPathComponent().path))
+                                .font(.system(size: 10.5)).foregroundStyle(dl.esito == nil ? Volta.t3 : Volta.a2).lineLimit(1).truncationMode(.middle)
+                        }
+                    }
+                    Spacer()
+                    Button(T("Fatto", "Done")) { dl.lasciati = [] }.buttonStyle(.plain).font(.system(size: 12, weight: .medium)).foregroundStyle(Volta.a2)
+                }
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4), spacing: 6) {
+                    azione("tray.and.arrow.down", T("Ripiano", "Shelf")) { tray.add(dl.lasciati) }
+                    azione("dot.radiowaves.up.forward", "AirDrop") { NSSharingService(named: .sendViaAirDrop)?.perform(withItems: dl.lasciati) }
+                    azione("doc.zipper", "Zip") { dl.comprimi() }
+                    azione("link", T("Percorso", "Copy path")) { dl.copiaPercorsi() }
+                    azione("menubar.dock.rectangle", T("Scrivania", "Desktop")) {
+                        dl.sposta(in: FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask)[0], nome: T("Scrivania", "Desktop"))
+                    }
+                    azione("doc", T("Documenti", "Documents")) {
+                        dl.sposta(in: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0], nome: T("Documenti", "Documents"))
+                    }
+                    azione("arrow.up.forward.app", T("Apri", "Open")) { dl.lasciati.forEach { NSWorkspace.shared.open($0) } }
+                    azione("trash", T("Cestino", "Trash")) { dl.cestinaLasciati() }
+                    if dl.tuttiImmagini {
+                        azione("photo", "→ JPEG") { dl.converti("jpeg") }
+                        azione("photo", "→ PNG") { dl.converti("png") }
+                        azione("doc.richtext", "→ PDF") { dl.converti("pdf") }
+                        azione("magnifyingglass", T("Mostra", "Show")) { NSWorkspace.shared.activateFileViewerSelecting(dl.lasciati) }
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private func azione(_ s: String, _ nome: String, _ a: @escaping () -> Void) -> some View {
+        Button(action: a) {
+            HStack(spacing: 5) {
+                Image(systemName: s).font(.system(size: 11)).frame(width: 14)
+                Text(nome).font(.system(size: 11.5)).lineLimit(1).minimumScaleFactor(0.8)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(Volta.t1).padding(.horizontal, 8).frame(height: 26)
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Volta.card2)).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var recenti: some View {
             VCard(padding: 12) {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack {
@@ -324,6 +470,9 @@ struct FilesTab: View {
                     Spacer(minLength: 0)
                 }
             }
+    }
+
+    private var griglia: some View {
             GrigliaTasti {
                 TastoScheda(simbolo: "arrow.down.circle", titolo: T("Download", "Downloads")) { NSWorkspace.shared.open(dl.cartella) }
                 TastoScheda(simbolo: "wand.and.stars", titolo: T("Riordina", "Tidy up"), principale: true) { dl.riordina() }
@@ -345,9 +494,6 @@ struct FilesTab: View {
                 }
             }
             .frame(width: 280)
-        }
-        .onAppear { dl.guarda(true) }
-        .onDisappear { dl.guarda(false) }
     }
 
     private func riga(_ f: DownloadsModel.File) -> some View {
@@ -518,21 +664,18 @@ struct MusicTab: View {
             // 29/10: every app with audio open (Spotify, Music, browsers, calls…), not only the ones playing this second
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 5) {
-                    if store.tutte.isEmpty {
-                        Text(T("Nessuna app con l'audio aperto", "No app has audio open")).font(.system(size: 11)).foregroundStyle(Volta.t3)
+                    // 29/10, the user: only apps actually playing (a paused Spotify leaves the list)
+                    let attive = store.tutte.filter(\.playing)
+                    if attive.isEmpty {
+                        Text(T("Nessuna app sta suonando", "No app is playing")).font(.system(size: 11)).foregroundStyle(Volta.t3)
                     }
-                    ForEach(store.tutte) { app in
+                    ForEach(attive) { app in
                         let g = store.gain(app.id)
                         let icona = (icone.icona(bundle: app.id) ?? app.icon).map { Image(nsImage: $0) } ?? Image(systemName: "app")
                         riga(icona, app.name, g, g == 0, { store.setGain(app.id, $0) }, { store.setGain(app.id, g == 0 ? 1 : 0) })
-                            .opacity(app.playing ? 1 : 0.6)
                     }
                     if store.tapError {
-                        Button { TileOpen.url("x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture") } label: {
-                            Text(T("Serve Registrazione audio di sistema: apri", "Needs System Audio Recording: open settings"))
-                                .font(.system(size: 10)).foregroundStyle(Night.amber).underline()
-                        }
-                        .buttonStyle(.plain)
+                        PermessoLink(testo: T("Consenti la Registrazione audio di sistema", "Allow System Audio Recording"), permesso: .audio, size: 10.5)
                     }
                 }
             }
@@ -550,26 +693,47 @@ enum SchedaMusicaApri {
 
 // MARK: - Meetings
 
+/// 29/10: the Calendar tab (it was Meetings): any day's events, a week strip to jump around, and meeting actions.
 struct MeetingsTab: View {
     @ObservedObject private var cal = CalendarModel.shared
     @State private var bloccato: String?
+    @State private var giorno = Calendar.current.startOfDay(for: Date())
+    @State private var eventi: [CalendarModel.Next] = []
+    @State private var conti: [Int] = []
+
+    private var lingua: Locale { Locale(identifier: pulsarItalian ? "it_IT" : "en_US") }
+    private var oggi: Date { Calendar.current.startOfDay(for: Date()) }
 
     var body: some View {
         HStack(spacing: 8) {
             VCard(padding: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    TimelineView(.everyMinute) { ctx in
-                        Titoletto(testo: T("Oggi", "Today"), destra: bloccato ?? prossima(ctx.date))
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        TastoTondo(simbolo: "chevron.left", nome: T("Giorno prima", "Previous day")) { vai(-1) }
+                        Text(titoloGiorno).font(.system(size: 13, weight: .medium)).foregroundStyle(Volta.t1).lineLimit(1)
+                        TastoTondo(simbolo: "chevron.right", nome: T("Giorno dopo", "Next day")) { vai(1) }
+                        if giorno != oggi {
+                            Button(T("Oggi", "Today")) { giorno = oggi; carica() }.buttonStyle(.plain).font(.system(size: 11.5, weight: .medium)).foregroundStyle(Volta.a2)
+                        }
+                        Spacer(minLength: 4)
+                        TimelineView(.everyMinute) { ctx in
+                            Text(bloccato ?? (giorno == oggi ? prossima(ctx.date) : nil) ?? "").font(.system(size: 11)).foregroundStyle(Volta.t3).lineLimit(1)
+                        }
                     }
+                    settimana
                     if cal.denied {
-                        Text(T("Consenti il Calendario in Impostazioni di Sistema", "Allow Calendar in System Settings")).font(.system(size: 12)).foregroundStyle(Night.amber)
-                    } else if cal.oggi.isEmpty {
-                        Text(T("Niente altro oggi", "Nothing else today")).font(.system(size: 12)).foregroundStyle(Volta.t3)
+                        PermessoLink(testo: T("Consenti il Calendario", "Allow Calendar"), permesso: .calendario, size: 12)
+                    } else if eventi.isEmpty {
+                        Text(giorno == oggi ? T("Niente altro oggi", "Nothing else today") : T("Niente in calendario", "Nothing on the calendar"))
+                            .font(.system(size: 12)).foregroundStyle(Volta.t3)
                     }
-                    ForEach(Array(cal.oggi.prefix(4).enumerated()), id: \.offset) { _, e in riga(e) }
-                    Spacer(minLength: 0)
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(spacing: 2) { ForEach(Array(eventi.enumerated()), id: \.offset) { _, e in riga(e) } }
+                    }
                 }
             }
+            .onAppear { cal.refresh(); carica() }
+            .onChange(of: cal.oggi) { _, _ in carica() }
             GrigliaTasti {
                 TastoScheda(simbolo: "video.fill", titolo: "Google Meet", principale: true) { NSWorkspace.shared.open(URL(string: "https://meet.new")!) }
                 TastoScheda(simbolo: "video", titolo: "Zoom") { NSWorkspace.shared.open(URL(string: "https://zoom.us/start/videomeeting")!) }
@@ -585,6 +749,52 @@ struct MeetingsTab: View {
             .frame(width: 280)
         }
         .onAppear { cal.refresh() }
+    }
+
+    private var titoloGiorno: String {
+        let d = Calendar.current.dateComponents([.day], from: oggi, to: giorno).day ?? 0
+        if d == 0 { return T("Oggi", "Today") }
+        if d == 1 { return T("Domani", "Tomorrow") }
+        if d == -1 { return T("Ieri", "Yesterday") }
+        return giorno.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).locale(lingua))
+    }
+
+    private func vai(_ d: Int) {
+        giorno = Calendar.current.date(byAdding: .day, value: d, to: giorno) ?? giorno
+        carica()
+    }
+
+    /// Today's list hides what's over; other days show everything.
+    private func carica() {
+        eventi = giorno == oggi ? cal.oggi : cal.eventi(giorno: giorno)
+        conti = cal.conteggi(da: oggi, n: 7)
+    }
+
+    /// The next seven days: tap one to see it; dots for how busy it is.
+    private var settimana: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<7, id: \.self) { k in
+                let d = Calendar.current.date(byAdding: .day, value: k, to: oggi) ?? oggi
+                let scelto = d == giorno
+                let n = k < conti.count ? conti[k] : 0
+                Button { giorno = d; carica() } label: {
+                    VStack(spacing: 2) {
+                        Text(d.formatted(.dateTime.weekday(.narrow).locale(lingua))).font(.system(size: 9.5)).foregroundStyle(scelto ? Volta.primT : Volta.t3)
+                        Text("\(Calendar.current.component(.day, from: d))").font(.system(size: 12, weight: .medium).monospacedDigit())
+                            .foregroundStyle(scelto ? Volta.primT : Volta.t1)
+                        HStack(spacing: 2) {
+                            ForEach(0..<min(n, 3), id: \.self) { _ in Circle().fill(scelto ? Volta.primT : Volta.a2).frame(width: 3, height: 3) }
+                        }
+                        .frame(height: 3)
+                    }
+                    .frame(maxWidth: .infinity).frame(height: 40)
+                    .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(scelto ? Volta.prim : Volta.card2))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hint(n == 0 ? T("Nessun evento", "No events") : T("\(n) eventi", "\(n) events"))
+            }
+        }
     }
 
     /// "Standup in 12 min", or nil when there's no meeting coming today.

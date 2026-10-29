@@ -88,6 +88,8 @@ enum Chiave: String, CaseIterable {
     case contoData          // 29/10: Countdown tile, the date (seconds since 1970)
     case abitudiniNomi      // 29/10: Habits tile, names, comma separated
     case abitudiniFatte     // 29/10: Habits tile, name → days done
+    case casaSlot           // 29/10: what Home shows, slot ids comma separated
+    case notionDatabase     // 29/10: the To-do tab's Notion database id (the key is in the Keychain)
     case isolaTray
     case isolaUltimoBrano
     case isolaWAChat
