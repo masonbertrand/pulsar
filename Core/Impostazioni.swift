@@ -74,6 +74,9 @@ enum Chiave: String, CaseIterable {
     case isolaTilesLavoro   // 27/10: the Work tab's tiles (the tab became Communications on 28/10)
     case notionPagine       // 28/10: pages pinned to the Notion tab, as JSON
     case isolaApriPassando  // 28/10: the island opens when the mouse rests on the notch (on by default); off = click only
+    case orologiFusi        // 29/10: World Clock tile, time zone ids separated by commas
+    case coloriRecenti      // 29/10: Color Picker tile, recent hex codes separated by commas
+    case notaRapida         // 29/10: Scratchpad tile text
     case isolaTray
     case isolaUltimoBrano
     case isolaWAChat

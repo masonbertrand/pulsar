@@ -210,7 +210,7 @@ struct IslandBarra: View {
                 scheda(.comunicazioni, "bubble.left.and.bubble.right", "bubble.left.and.bubble.right.fill", T("Messaggi", "Comms"),
                        avviso: dock.totale > 0)
                 scheda(.file, "folder", "folder.fill", "File")
-                scheda(.musica, "music.note", "music.note", T("Musica", "Music"))
+                scheda(.musica, "music.note", "music.note", T("In ascolto", "Now Playing"))
                 scheda(.riunioni, "video", "video.fill", T("Riunioni", "Meetings"))
                 scheda(.notion, "n.square", "n.square.fill", "Notion")
             }
@@ -489,7 +489,7 @@ struct IslandPanelContent: View {
                             switch model.tab {
                             case .comunicazioni: CommsTab()
                             case .file: FilesTab()
-                            case .musica: MusicTab(media: model.home as? MediaSource)
+                            case .musica: MusicTab(media: model.home as? MediaSource, dial: model.dial?.store)
                             case .riunioni: MeetingsTab()
                             default: NotionTab()
                             }

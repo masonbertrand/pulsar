@@ -451,6 +451,8 @@ final class IslandModule {
                          ControlsWidget(model: model), PowerWidget(), StatsWidget()]
         model.widgets += [ClockWidget(), MonthWidget(), SunWidget()]   // 14/10: da LaunchMe, forme Braun (widget-braun.swift)
         model.widgets.append(LanciatoriWidget()) // 24/10: i Lanciatori, nella Lite dal 24/10 sera (Moduli/Lanciatori)
+        // 29/10: World Clock, Keep Awake, Screenshot, Color Picker, Scratchpad, Network (widget-nuove.swift)
+        model.widgets += [WorldClockWidget(), KeepAwakeWidget(), ScreenshotWidget(), ColorPickerWidget(), ScratchpadWidget(), NetworkWidget()]
         // 12/10 sera: una volta sola, le tessere nuove che contano di più entrano nella riga (le altre dai chip)
         // 12/10 tarda sera, l'autore: "meteo non ha senso così largo", "Spotify riempi la sezione": meteo 2 celle, musica 3
         if !Impostazioni.bool(.isolaMeteoStretto) {

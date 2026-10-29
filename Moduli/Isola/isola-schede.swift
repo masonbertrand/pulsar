@@ -275,60 +275,64 @@ struct FilesTab: View {
     }
 }
 
-// MARK: - Music
+// MARK: - Now Playing (29/10: the song with every control, and a mixer beside it)
 
 struct MusicTab: View {
     let media: MediaSource?
+    let dial: DialStore?
     var body: some View {
-        if let media { Viva(media: media) }
-        else {
-            VCard { Text(T("Nessun lettore musicale", "No music player")).font(.system(size: 14)).foregroundStyle(Volta.t2) }
+        HStack(spacing: 8) {
+            if let media { Riproduzione(media: media) }
+            else { VCard { Text(T("Nessun lettore musicale", "No music player")).font(.system(size: 14)).foregroundStyle(Volta.t2) } }
+            Mixer(dial: dial).frame(width: 250)
         }
     }
 
-    private struct Viva: View {
+    private struct Riproduzione: View {
         @ObservedObject var media: MediaSource
-        @State private var volume: Float = SystemVolume.level
 
         var body: some View {
             let t = media.track ?? media.last
             let live = media.track != nil
             let suona = live && media.track?.playing == true
             let cols = ArtPalette.colors(media.artwork)
-            VCard(glow: suona ? cols[0] : Volta.a2, motion: suona ? cols : nil, padding: 14) {
-                HStack(spacing: 18) {
+            VCard(glow: suona ? cols[0] : Volta.a2, motion: suona ? cols : nil, padding: 12) {
+                HStack(spacing: 14) {
                     Group {
                         if let a = media.artwork, live { Image(nsImage: a).resizable().aspectRatio(contentMode: .fill) }
                         else { LinearGradient(colors: [Volta.a2, Volta.a4], startPoint: .topLeading, endPoint: .bottomTrailing) }
                     }
-                    .frame(width: 130, height: 130).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .frame(width: 112, height: 112).clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .onTapGesture { SchedaMusicaApri.apri(t?.app) }
                     .hint(T("Apri \(t?.app ?? "Spotify")", "Open \(t?.app ?? "Spotify")"))
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(t?.title ?? T("Niente in riproduzione", "Nothing playing")).font(.system(size: 18, weight: .semibold)).foregroundStyle(Volta.t1).lineLimit(1)
-                        Text(t?.artist ?? "").font(.system(size: 13)).foregroundStyle(Volta.t2).lineLimit(1)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(suona ? T("In riproduzione", "Now playing") : live ? T("In pausa", "Paused") : T("Ultimo ascoltato", "Last played"))
+                            .font(.system(size: 11)).foregroundStyle(Volta.t3)
+                        Text(t?.title ?? T("Niente in riproduzione", "Nothing playing")).font(.system(size: 16, weight: .semibold)).foregroundStyle(Volta.t1).lineLimit(1)
+                        Text([t?.artist, t?.album].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                            .font(.system(size: 12)).foregroundStyle(Volta.t2).lineLimit(1)
                         riga
-                        Spacer(minLength: 2)
+                        Spacer(minLength: 0)
                         if live { ProgressBar(src: media) }
-                        HStack(spacing: 14) {
-                            tasto("backward.fill", 14, T("Precedente", "Previous")) { media.command(.previous) }.disabled(!live)
+                        HStack(spacing: 6) {
+                            tasto("shuffle", 11, T("Casuale", "Shuffle")) { media.command(.shuffle) }.disabled(!live)
+                            tasto("gobackward.15", 12, T("Indietro 15 s", "Back 15 s")) { media.command(.skip(-15)) }.disabled(!live)
+                            tasto("backward.fill", 13, T("Precedente", "Previous")) { media.command(.previous) }.disabled(!live)
                             Button { live ? media.command(.playPause) : media.resumeLast() } label: {
-                                Image(systemName: suona ? "pause.fill" : "play.fill").font(.system(size: 16, weight: .semibold)).foregroundStyle(Volta.primT)
-                                    .frame(width: 40, height: 40).background(Circle().fill(Volta.prim)).contentShape(Circle())
+                                Image(systemName: suona ? "pause.fill" : "play.fill").font(.system(size: 15, weight: .semibold)).foregroundStyle(Volta.primT)
+                                    .frame(width: 36, height: 36).background(Circle().fill(Volta.prim)).contentShape(Circle())
                             }
                             .buttonStyle(.plain).hint(suona ? T("Pausa", "Pause") : T("Riproduci", "Play"))
-                            tasto("forward.fill", 14, T("Successivo", "Next")) { media.command(.next) }.disabled(!live)
-                            Spacer(minLength: 10)
-                            Image(systemName: "speaker.fill").font(.system(size: 10)).foregroundStyle(Volta.t3)
-                            Slider(value: Binding(get: { volume }, set: { volume = $0; SystemVolume.level = $0 }), in: 0...1)
-                                .controlSize(.mini).frame(width: 110)
-                            Image(systemName: "speaker.wave.3.fill").font(.system(size: 10)).foregroundStyle(Volta.t3)
+                            tasto("forward.fill", 13, T("Successivo", "Next")) { media.command(.next) }.disabled(!live)
+                            tasto("goforward.15", 12, T("Avanti 15 s", "Forward 15 s")) { media.command(.skip(15)) }.disabled(!live)
+                            tasto("repeat", 11, T("Ripeti", "Repeat")) { media.command(.repeatMode) }.disabled(!live)
+                            Spacer(minLength: 0)
+                            tasto("arrow.up.left.and.arrow.down.right", 10, T("Lettore a tutto schermo", "Full screen player")) { FullPlayer.shared.toggle(media: media) }
                         }
                     }
                 }
             }
-            .onAppear { volume = SystemVolume.level }
         }
 
         /// The line being sung, when the song has synced lyrics.
@@ -336,8 +340,7 @@ struct MusicTab: View {
             if case .synced(let righe) = media.lyrics {
                 TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
                     if let i = LRC.index(at: media.position(at: ctx.date), in: righe) {
-                        Text(righe[i].text).font(.system(size: 13, weight: .medium)).foregroundStyle(Volta.t1.opacity(0.85)).lineLimit(1)
-                            .padding(.top, 2)
+                        Text("“\(righe[i].text)”").font(.system(size: 12.5, weight: .medium)).foregroundStyle(Volta.t1.opacity(0.85)).lineLimit(1)
                     }
                 }
             }
@@ -345,9 +348,86 @@ struct MusicTab: View {
 
         private func tasto(_ s: String, _ size: CGFloat, _ nome: String, _ a: @escaping () -> Void) -> some View {
             Button(action: a) {
-                Image(systemName: s).font(.system(size: size, weight: .medium)).foregroundStyle(Volta.t1).frame(width: 28, height: 28).contentShape(Rectangle())
+                Image(systemName: s).font(.system(size: size, weight: .medium)).foregroundStyle(Volta.t1).frame(width: 26, height: 26).contentShape(Rectangle())
             }
             .buttonStyle(.plain).hint(nome)
+        }
+    }
+
+    /// System volume and mute, each app's own volume (the dial's mixer), and where the sound goes.
+    private struct Mixer: View {
+        let dial: DialStore?
+        @State private var volume: Float = SystemVolume.level
+        @State private var muto = SystemVolume.muted
+        @State private var uscite: [UsciteAudio.Uscita] = []
+        @State private var uscita = UsciteAudio.attuale
+
+        var body: some View {
+            VCard(padding: 12) {
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack {
+                        Text("Mixer").font(.system(size: 12, weight: .medium)).foregroundStyle(Volta.t2)
+                        Spacer()
+                        Menu {
+                            ForEach(uscite) { u in
+                                Button((u.id == uscita ? "✓ " : "") + u.nome) { UsciteAudio.scegli(u.id); uscita = u.id }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "hifispeaker").font(.system(size: 10))
+                                Text(uscite.first { $0.id == uscita }?.nome ?? T("Uscita", "Output")).font(.system(size: 11)).lineLimit(1)
+                            }
+                            .foregroundStyle(Volta.t2)
+                        }
+                        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                        .hint(T("Dove va il suono", "Where the sound goes"))
+                    }
+                    riga(icona: Image(systemName: muto ? "speaker.slash.fill" : "speaker.wave.2.fill"), nome: T("Sistema", "System"),
+                         valore: muto ? 0 : volume, muto: muto,
+                         cambia: { volume = $0; SystemVolume.level = $0; if muto { muto = false } },
+                         silenzia: { muto.toggle(); SystemVolume.muted = muto })
+                    if let dial { AppMixer(store: dial, riga: riga) }
+                    Spacer(minLength: 0)
+                }
+            }
+            .onAppear { volume = SystemVolume.level; muto = SystemVolume.muted; uscite = UsciteAudio.elenco(); uscita = UsciteAudio.attuale }
+        }
+
+        func riga(icona: Image, nome: String, valore: Float, muto: Bool, cambia: @escaping (Float) -> Void, silenzia: @escaping () -> Void) -> AnyView {
+            AnyView(HStack(spacing: 7) {
+                Button(action: silenzia) {
+                    icona.resizable().scaledToFit().frame(width: 16, height: 16).foregroundStyle(muto ? Night.amber : Volta.t2)
+                        .frame(width: 22, height: 22).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).hint(muto ? T("Riattiva \(nome)", "Unmute \(nome)") : T("Silenzia \(nome)", "Mute \(nome)"))
+                Text(nome).font(.system(size: 11.5)).foregroundStyle(Volta.t1).lineLimit(1).frame(width: 62, alignment: .leading)
+                Slider(value: Binding(get: { Double(valore) }, set: { cambia(Float($0)) }), in: 0...1).controlSize(.mini)
+                Text("\(Int((valore * 100).rounded()))").font(.system(size: 10.5).monospacedDigit()).foregroundStyle(Volta.t3).frame(width: 24, alignment: .trailing)
+            })
+        }
+    }
+
+    /// The apps playing sound right now, each with its own volume.
+    private struct AppMixer: View {
+        @ObservedObject var store: DialStore
+        @ObservedObject private var icone = IconeApp.shared
+        let riga: (Image, String, Float, Bool, @escaping (Float) -> Void, @escaping () -> Void) -> AnyView
+
+        var body: some View {
+            Group {
+                if store.apps.isEmpty {
+                    Text(T("Nessuna app sta suonando", "No app is playing")).font(.system(size: 11)).foregroundStyle(Volta.t3)
+                }
+                ForEach(store.apps.prefix(3)) { app in
+                    let g = store.gain(app.id)
+                    let icona = (icone.icona(bundle: app.id) ?? app.icon).map { Image(nsImage: $0) } ?? Image(systemName: "app")
+                    riga(icona, app.name, g, g == 0, { store.setGain(app.id, $0) }, { store.setGain(app.id, g == 0 ? 1 : 0) })
+                }
+                if store.tapError {
+                    Text(T("Serve Registrazione audio di sistema", "Needs System Audio Recording")).font(.system(size: 10)).foregroundStyle(Night.amber)
+                }
+            }
+            .onAppear { store.refresh() }
         }
     }
 }
