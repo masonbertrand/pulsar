@@ -338,7 +338,7 @@ private struct StatsTile: View {
     private func ring(_ v: Double, _ label: String) -> some View {
         ZStack {
             Circle().stroke(Color.primary.opacity(0.12), lineWidth: 4)
-            Circle().trim(from: 0, to: v).stroke(v > 0.85 ? Night.amber : Color.primary.opacity(0.85), style: StrokeStyle(lineWidth: 4, lineCap: .round))
+            Circle().trim(from: 0, to: v).stroke(Livello.carico(v).colore, style: StrokeStyle(lineWidth: 4, lineCap: .round))   // 29/10: green, amber, red
                 .rotationEffect(.degrees(-90))
             VStack(spacing: 0) {
                 Text("\(Int(v * 100))%").font(.system(size: 11, weight: .medium).monospacedDigit())

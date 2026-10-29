@@ -68,7 +68,7 @@ private struct BTTile: View {
                     Spacer(minLength: 4)
                     ForEach(v.livelli.sorted { $0.key < $1.key }, id: \.key) { e in
                         Text((e.key.isEmpty ? "" : String(e.key.prefix(1)) + " ") + "\(e.value)%")
-                            .font(.system(size: 10.5).monospacedDigit()).foregroundStyle(e.value <= 20 ? Night.amber : Color.primary.opacity(0.65))
+                            .font(.system(size: 10.5).monospacedDigit()).foregroundStyle(Livello.riserva(e.value).colore)
                     }
                 }
             }

@@ -12,6 +12,17 @@ enum TileMetrics {
     static let radius: CGFloat = 20
 }
 
+/// 29/10: green for good, amber for watch it, red for a problem (thresholds in tessere-logica.swift).
+extension Livello {
+    var colore: Color {
+        switch self {
+        case .buono: return Theme.light ? Color(red: 0.16, green: 0.58, blue: 0.30) : Color(red: 0.42, green: 0.84, blue: 0.52)   // a true green (Night.green is blue)
+        case .medio: return Night.amber
+        case .cattivo: return Night.red
+        }
+    }
+}
+
 /// 28/10: the small round button in a tile's corner.
 struct TileCornerButton: View {
     let symbol: String
