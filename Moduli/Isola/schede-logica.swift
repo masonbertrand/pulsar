@@ -55,3 +55,22 @@ enum NotionLinks {
         return s.isEmpty ? "Notion" : s
     }
 }
+
+/// 29/10: the order of the island's tabs, which the user can change and save.
+enum OrdineSchede {
+    /// The saved order ("casa,claude,…"), keeping only known tabs once each; tabs added in later versions go at the end.
+    static func leggi(_ salvato: String?, tutte: [String]) -> [String] {
+        var visti = Set<String>()
+        let noti = (salvato ?? "").split(separator: ",").map(String.init).filter { tutte.contains($0) && visti.insert($0).inserted }
+        return noti + tutte.filter { !visti.contains($0) }
+    }
+
+    /// `id` moved to position `a` (clamped).
+    static func sposta(_ ordine: [String], _ id: String, a: Int) -> [String] {
+        guard let i = ordine.firstIndex(of: id) else { return ordine }
+        var o = ordine
+        o.remove(at: i)
+        o.insert(id, at: min(max(a, 0), o.count))
+        return o
+    }
+}

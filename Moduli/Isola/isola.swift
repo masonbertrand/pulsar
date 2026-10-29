@@ -99,6 +99,34 @@ final class IslandModel: ObservableObject {
     // prima restava della misura vecchia per qualche secondo e la Casa copriva le icone in alto.
     /// 24/10: anteprima della Casa a freddo anche mentre Claude lavora (pulsar://isola?freddo=1, freddo=0 la toglie)
     @Published var anteprimaFredda = false { didSet { if anteprimaFredda != oldValue { DispatchQueue.main.async { self.dropChanged?() } } } }
+    /// 29/10: the tabs in the user's order (drag them in the bar, or right-click to move or hide), saved in settings.
+    @Published var ordineSchede: [IslandTab] = IslandModel.leggiOrdine() {
+        didSet { Impostazioni.set(ordineSchede.map(\.chiave).joined(separator: ","), .isolaOrdineSchede) }
+    }
+    @Published var schedeNascoste: Set<IslandTab> = Set((Impostazioni.string(.isolaSchedeNascoste) ?? "").split(separator: ",")
+        .compactMap { k in IslandTab.allCases.first { $0.chiave == k } }) {
+        didSet { Impostazioni.set(schedeNascoste.map(\.chiave).sorted().joined(separator: ","), .isolaSchedeNascoste) }
+    }
+    var schedeVisibili: [IslandTab] { ordineSchede.filter { !schedeNascoste.contains($0) } }
+
+    static func leggiOrdine() -> [IslandTab] {
+        OrdineSchede.leggi(Impostazioni.string(.isolaOrdineSchede), tutte: IslandTab.allCases.map(\.chiave))
+            .compactMap { k in IslandTab.allCases.first { $0.chiave == k } }
+    }
+
+    /// Moves a tab to position `a` among the visible ones; hidden tabs keep their place at the end.
+    func spostaScheda(_ t: IslandTab, a: Int) {
+        let visibili = OrdineSchede.sposta(schedeVisibili.map(\.chiave), t.chiave, a: a)
+        let nuovo = visibili + ordineSchede.filter { schedeNascoste.contains($0) }.map(\.chiave)
+        withAnimation(.easeInOut(duration: 0.2)) { ordineSchede = nuovo.compactMap { k in IslandTab.allCases.first { $0.chiave == k } } }
+    }
+
+    func nascondi(_ t: IslandTab) {
+        guard t != .casa else { return }
+        schedeNascoste.insert(t)
+        if tab == t { tab = .casa }
+    }
+
     /// 28/10: the height every tab's content gets (the tallest of them), set by the island's layout.
     @Published var altezzaContenuto: CGFloat = 196
     /// Does this source take over the panel with its own view? Claude's alerts don't on the Claude tab,
@@ -187,7 +215,7 @@ struct IslandView: View {
                 Color.clear
             case .peek:
                 if let p = model.peek {
-                    PeekView(item: p, notchHeight: model.notchHeight)
+                    PeekView(item: p, notchHeight: model.notchHeight, notchWidth: model.notchWidth)
                         .id(p.key + p.title + p.detail)
                         .transition(.opacity.combined(with: .offset(y: -6)))
                 }
@@ -729,7 +757,9 @@ final class IslandModule {
         switch state {
         case .rest:     w = notch.width + 20;                h = notch.height
         case .compact:  w = notch.width + 2 * wing + 20;     h = notch.height
-        case .peek:     w = peekItem.map { PeekView.width($0, notch: notch.width) } ?? notch.width + 20; h = notch.height + 28
+        case .peek:     w = peekItem.map { PeekView.width($0, notch: notch.width) } ?? notch.width + 20
+                        // 29/10: notifications stay in the menu bar band beside the notch, nothing hangs below it
+                        h = notch.height + ((peekItem.map(PeekView.nelMenu) ?? false) ? 0 : 28)
         case .expanded, .alert:
             // 17/10 sera: pannello attaccato al bordo alto, testa nella fascia del notch: notch + 8 + tessera + 10
             if scrive { w = 600; h = notch.height + 8 + EmailCard.altezza + 10 }

@@ -129,6 +129,35 @@ enum IslandTab {
     var isTiles: Bool { self == .tessere }
 }
 
+extension IslandTab: CaseIterable {
+    /// 29/10: the name saved in the tab order (stable; don't rename).
+    var chiave: String { "\(self)" }
+    var nome: String {
+        switch self {
+        case .casa: return T("Casa", "Home")
+        case .claude: return "Claude"
+        case .tessere: return T("Tessere", "Tiles")
+        case .comunicazioni: return T("Messaggi", "Comms")
+        case .file: return "File"
+        case .musica: return T("In ascolto", "Now Playing")
+        case .riunioni: return T("Riunioni", "Meetings")
+        case .notion: return "Notion"
+        }
+    }
+    var simbolo: (vuoto: String, pieno: String) {
+        switch self {
+        case .casa: return ("house", "house.fill")
+        case .claude: return ("asterisk", "asterisk")
+        case .tessere: return ("square.grid.2x2", "square.grid.2x2.fill")
+        case .comunicazioni: return ("bubble.left.and.bubble.right", "bubble.left.and.bubble.right.fill")
+        case .file: return ("folder", "folder.fill")
+        case .musica: return ("music.note", "music.note")
+        case .riunioni: return ("video", "video.fill")
+        case .notion: return ("n.square", "n.square.fill")
+        }
+    }
+}
+
 /// 28/10: the band beside the notch. Left: the date and time. Right: Claude's status when it has one,
 /// or on the tile tabs the quick buttons (settings, app grid, brightness, theme, AirDrop, Files, Notes).
 /// The tabs moved to the bar at the bottom (IslandBarra).
@@ -202,17 +231,12 @@ struct IslandBarra: View {
 
     var body: some View {
         ZStack {
-            // 28/10: the tabs in the middle, like the reference
+            // 28/10: the tabs in the middle, like the reference; 29/10: in the user's order, drag to rearrange
             HStack(spacing: 4) {
-                scheda(.casa, "house", "house.fill", T("Casa", "Home"))
-                scheda(.claude, "asterisk", "asterisk", "Claude", avviso: model.agent?.hasPending == true || model.agent?.question != nil)
-                scheda(.tessere, "square.grid.2x2", "square.grid.2x2.fill", T("Tessere", "Tiles"))
-                scheda(.comunicazioni, "bubble.left.and.bubble.right", "bubble.left.and.bubble.right.fill", T("Messaggi", "Comms"),
-                       avviso: dock.totale > 0)
-                scheda(.file, "folder", "folder.fill", "File")
-                scheda(.musica, "music.note", "music.note", T("In ascolto", "Now Playing"))
-                scheda(.riunioni, "video", "video.fill", T("Riunioni", "Meetings"))
-                scheda(.notion, "n.square", "n.square.fill", "Notion")
+                ForEach(model.schedeVisibili, id: \.self) { t in
+                    scheda(t, avviso: t == .claude ? (model.agent?.hasPending == true || model.agent?.question != nil)
+                                    : t == .comunicazioni ? dock.totale > 0 : false)
+                }
             }
             HStack(spacing: 4) { Spacer(minLength: 0); destra }
         }
@@ -232,11 +256,15 @@ struct IslandBarra: View {
             }
     }
 
-    private func scheda(_ t: IslandTab, _ simbolo: String, _ pieno: String, _ nome: String, avviso: Bool = false) -> some View {
+    @State private var trascinata: IslandTab?
+    @State private var dx: CGFloat = 0
+
+    private func scheda(_ t: IslandTab, avviso: Bool = false) -> some View {
         let on = model.tab == t
+        let nome = t.nome
         return Button { withAnimation(.easeInOut(duration: 0.28)) { model.tab = t } } label: {
             HStack(spacing: 6) {
-                Image(systemName: on ? pieno : simbolo).font(.system(size: 12, weight: .medium))
+                Image(systemName: on ? t.simbolo.pieno : t.simbolo.vuoto).font(.system(size: 12, weight: .medium))
                 if on { Text(nome).font(.system(size: 12.5, weight: .medium)) }
             }
             .foregroundStyle(on ? (t == .claude ? ClaudeTab.rame : Volta.t1) : Volta.t3)
@@ -248,8 +276,23 @@ struct IslandBarra: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .hint(nome)
+        .hint(T("\(nome) · trascina per spostare, clic destro per altro", "\(nome) · drag to move, right-click for more"))
         .animation(.easeOut(duration: 0.18), value: on)
+        // 29/10: drag sideways to move the tab; each step of about one tab's width moves it one place
+        .offset(x: trascinata == t ? dx : 0)
+        .zIndex(trascinata == t ? 1 : 0)
+        .simultaneousGesture(DragGesture(minimumDistance: 8).onChanged { v in
+            trascinata = t; dx = v.translation.width
+        }.onEnded { v in
+            if let i = model.schedeVisibili.firstIndex(of: t) { model.spostaScheda(t, a: i + Int((v.translation.width / 36).rounded())) }
+            trascinata = nil; dx = 0
+        })
+        .contextMenu {
+            Button(T("Sposta a sinistra", "Move left")) { if let i = model.schedeVisibili.firstIndex(of: t) { model.spostaScheda(t, a: i - 1) } }
+            Button(T("Sposta a destra", "Move right")) { if let i = model.schedeVisibili.firstIndex(of: t) { model.spostaScheda(t, a: i + 1) } }
+            if t != .casa { Button(T("Nascondi questa scheda", "Hide this tab")) { model.nascondi(t) } }
+            if !model.schedeNascoste.isEmpty { Button(T("Mostra tutte le schede", "Show all tabs")) { model.schedeNascoste = [] } }
+        }
     }
 
     private func tasto(_ s: String, _ nome: String, on: Bool = false, _ azione: @escaping () -> Void) -> some View {

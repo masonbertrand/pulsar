@@ -77,6 +77,8 @@ enum Chiave: String, CaseIterable {
     case orologiFusi        // 29/10: World Clock tile, time zone ids separated by commas
     case coloriRecenti      // 29/10: Color Picker tile, recent hex codes separated by commas
     case notaRapida         // 29/10: Scratchpad tile text
+    case isolaOrdineSchede  // 29/10: the island's tabs in the user's order, comma separated
+    case isolaSchedeNascoste // 29/10: tabs the user hid, comma separated
     case isolaTray
     case isolaUltimoBrano
     case isolaWAChat

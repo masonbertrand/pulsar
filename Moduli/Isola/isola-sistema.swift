@@ -357,8 +357,51 @@ enum AX {
 struct PeekView: View {
     let item: PeekItem
     let notchHeight: CGFloat
+    var notchWidth: CGFloat = 0
+    @ObservedObject private var icone = IconeApp.shared
+
+    /// 29/10, the user: notifications dropping below the notch covered the apps in use, "do it to the side, in the menu".
+    /// Everything but the app-icons row and Muta's report (which has buttons) now stays in the menu bar band:
+    /// icon and title left of the notch, the detail right of it, nothing below the menu bar.
+    static func nelMenu(_ item: PeekItem) -> Bool { item.kind != "apps" && item.kind != "muta" }
+
+    /// The width of each side of the notch for an in-menu peek.
+    static func lato(_ item: PeekItem) -> CGFloat {
+        let sinistra = icona + 6 + misura(item.title, 11.5, .medium)
+        let destra = item.detail.isEmpty ? 0 : misura(item.detail, 11, .regular)
+        return min(210, max(60, sinistra, destra))
+    }
 
     var body: some View {
+        if Self.nelMenu(item) { vistaMenu } else { sotto }
+    }
+
+    private var vistaMenu: some View {
+        let lato = Self.lato(item)
+        return HStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Spacer(minLength: 0)
+                if item.kind == "app", let img = icone.icona(bundle: item.symbol) {
+                    Image(nsImage: img).resizable().frame(width: 15, height: 15)
+                } else {
+                    Image(systemName: item.symbol).font(.system(size: 11.5, weight: .medium)).foregroundStyle(tint).symbolRenderingMode(.hierarchical)
+                }
+                Text(item.title).font(.system(size: 11.5, weight: .medium)).lineLimit(1).truncationMode(.tail)
+            }
+            .frame(width: lato).padding(.trailing, 10)
+            Spacer().frame(width: notchWidth)
+            HStack {
+                Text(item.detail).font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.6)).lineLimit(1).truncationMode(.tail)
+                Spacer(minLength: 0)
+            }
+            .frame(width: lato).padding(.leading, 10)
+        }
+        .foregroundStyle(Color.primary)
+        .frame(maxWidth: .infinity)
+        .frame(height: notchHeight)
+    }
+
+    private var sotto: some View {
         VStack(spacing: 0) {
             Spacer().frame(height: notchHeight)
             Group {
@@ -417,6 +460,7 @@ struct PeekView: View {
 
     /// Larghezza che serve alla comparsa (prima era stimata contando i caratteri, e con testi lunghi sbagliava).
     static func width(_ item: PeekItem, notch: CGFloat) -> CGFloat {
+        if nelMenu(item) { return notch + 2 * (lato(item) + 10 + 14) }
         switch item.kind {
         case "apps": return max(notch + 20, CGFloat(AppIconsRow.apps().count) * 26 + 40)
         case "muta": return MutaPeekRiga.larghezza(item, notch: notch)
