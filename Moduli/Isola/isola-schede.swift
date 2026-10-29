@@ -130,9 +130,11 @@ struct CommsTab: View {
                     Titoletto(testo: T("Da leggere", "Unread"), destra: tot == 0 ? T("tutto letto", "all caught up") : "\(tot)")
                     let lista = elenco
                     if lista.isEmpty {
-                        Text(AXIsProcessTrusted() ? T("Nessuna app di messaggi nel Dock", "No messaging apps in the Dock")
-                                                  : T("Serve l'Accessibilità (Impostazioni → Permessi)", "Needs Accessibility (Settings → Permissions)"))
-                            .font(.system(size: 12)).foregroundStyle(Volta.t3)
+                        if AXIsProcessTrusted() {
+                            Text(T("Nessuna app di messaggi nel Dock", "No messaging apps in the Dock")).font(.system(size: 12)).foregroundStyle(Volta.t3)
+                        } else {
+                            PermessoLink(testo: T("Consenti l'Accessibilità per leggere i badge", "Allow Accessibility to read unread badges"), permesso: .accessibilita, size: 12)
+                        }
                     }
                     HStack(spacing: 4) { ForEach(lista.prefix(5)) { a in icona(a) } }
                     Spacer(minLength: 0)
@@ -518,21 +520,18 @@ struct MusicTab: View {
             // 29/10: every app with audio open (Spotify, Music, browsers, calls…), not only the ones playing this second
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 5) {
-                    if store.tutte.isEmpty {
-                        Text(T("Nessuna app con l'audio aperto", "No app has audio open")).font(.system(size: 11)).foregroundStyle(Volta.t3)
+                    // 29/10, the user: only apps actually playing (a paused Spotify leaves the list)
+                    let attive = store.tutte.filter(\.playing)
+                    if attive.isEmpty {
+                        Text(T("Nessuna app sta suonando", "No app is playing")).font(.system(size: 11)).foregroundStyle(Volta.t3)
                     }
-                    ForEach(store.tutte) { app in
+                    ForEach(attive) { app in
                         let g = store.gain(app.id)
                         let icona = (icone.icona(bundle: app.id) ?? app.icon).map { Image(nsImage: $0) } ?? Image(systemName: "app")
                         riga(icona, app.name, g, g == 0, { store.setGain(app.id, $0) }, { store.setGain(app.id, g == 0 ? 1 : 0) })
-                            .opacity(app.playing ? 1 : 0.6)
                     }
                     if store.tapError {
-                        Button { TileOpen.url("x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture") } label: {
-                            Text(T("Serve Registrazione audio di sistema: apri", "Needs System Audio Recording: open settings"))
-                                .font(.system(size: 10)).foregroundStyle(Night.amber).underline()
-                        }
-                        .buttonStyle(.plain)
+                        PermessoLink(testo: T("Consenti la Registrazione audio di sistema", "Allow System Audio Recording"), permesso: .audio, size: 10.5)
                     }
                 }
             }
@@ -562,7 +561,7 @@ struct MeetingsTab: View {
                         Titoletto(testo: T("Oggi", "Today"), destra: bloccato ?? prossima(ctx.date))
                     }
                     if cal.denied {
-                        Text(T("Consenti il Calendario in Impostazioni di Sistema", "Allow Calendar in System Settings")).font(.system(size: 12)).foregroundStyle(Night.amber)
+                        PermessoLink(testo: T("Consenti il Calendario", "Allow Calendar"), permesso: .calendario, size: 12)
                     } else if cal.oggi.isEmpty {
                         Text(T("Niente altro oggi", "Nothing else today")).font(.system(size: 12)).foregroundStyle(Volta.t3)
                     }

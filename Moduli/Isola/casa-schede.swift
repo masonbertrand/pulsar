@@ -22,17 +22,82 @@ enum CasaColori {
     static let viola = Color(red: 0.66, green: 0.40, blue: 0.92)
 }
 
+/// 29/10: Home is up to four slots the user picks (+ in the bar on Home): the Claude, Music and Focus cards, or any tile.
 struct CasaSchede: View {
     @ObservedObject var model: IslandModel
+
     var body: some View {
         HStack(spacing: 8) {
+            ForEach(Array(model.casaSlot.enumerated()), id: \.offset) { i, id in
+                slot(id)
+                    .overlay { if model.casaModifica { modifica(i, id) } }
+            }
+            if model.casaModifica && model.casaSlot.count < 4 {
+                Menu { scelte { id in model.casaSlot.append(id) } } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: "plus").font(.system(size: 18, weight: .medium))
+                        Text(T("Aggiungi", "Add")).font(.system(size: 12))
+                    }
+                    .foregroundStyle(Volta.t2).frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Volta.t3.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])))
+                }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden)
+                .frame(width: 120)
+            }
+        }
+    }
+
+    /// What can go in a slot: the three cards, then every tile.
+    @ViewBuilder private func scelte(_ scegli: @escaping (String) -> Void) -> some View {
+        Button("Claude Code") { scegli("claude") }
+        Button(T("Musica", "Music")) { scegli("musica") }
+        Button("Focus") { scegli("focus") }
+        Divider()
+        ForEach(model.widgets.sorted { $0.title < $1.title }, id: \.id) { w in Button(w.title) { scegli(w.id) } }
+    }
+
+    @ViewBuilder private func slot(_ id: String) -> some View {
+        switch id {
+        case "claude":
             Group {
                 if let st = model.agent { SchedaClaude(store: st, apri: { model.tab = .claude }) } else { SchedaClaude(store: nil, apri: { model.tab = .claude }) }
             }
             .onTapGesture { model.tab = .claude }          // 28/10: Claude has its own tab now
             .hint(T("Apri Claude", "Open Claude"))
+        case "musica":
             if let m = model.home as? MediaSource { SchedaMusica(media: m) } else { SchedaMusica(media: nil) }
-            if let d = model.dial?.store { SchedaFocus(store: d) }
+        case "focus":
+            if let d = model.dial?.store { SchedaFocus(store: d) } else { Color.clear }
+        default:
+            // any tile, on a card as tall as the others
+            if let w = model.widgets.first(where: { $0.id == id }) {
+                w.body(cells: 2)
+                    .padding(14)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Volta.card))
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            } else {
+                Color.clear
+            }
+        }
+    }
+
+    /// In edit mode: change what's in the slot, or remove it.
+    private func modifica(_ i: Int, _ id: String) -> some View {
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color.black.opacity(0.35))
+            Menu { scelte { nuovo in if i < model.casaSlot.count { model.casaSlot[i] = nuovo } } } label: {
+                Label(T("Cambia", "Change"), systemImage: "arrow.triangle.2.circlepath").font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white).padding(.horizontal, 12).frame(height: 28).background(Capsule().fill(Color.white.opacity(0.2)))
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if model.casaSlot.count > 1 {
+                Button { if i < model.casaSlot.count { model.casaSlot.remove(at: i) } } label: {
+                    Image(systemName: "minus.circle.fill").font(.system(size: 18)).foregroundStyle(Night.red, Color.white)
+                }
+                .buttonStyle(.plain).hint(T("Togli", "Remove")).padding(8)
+            }
         }
     }
 }

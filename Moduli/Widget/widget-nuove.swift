@@ -314,10 +314,9 @@ private struct NetworkTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                Label(PerfMonitor.speed(perf.down), systemImage: "arrow.down").font(.system(size: 11).monospacedDigit())
-                if cells >= 2 { Label(PerfMonitor.speed(perf.up), systemImage: "arrow.up").font(.system(size: 11).monospacedDigit()) }
+                Label(PerfMonitor.speed(perf.down), systemImage: "arrow.down").font(.system(size: 11).monospacedDigit()).foregroundStyle(ColoriRete.giu)
+                if cells >= 2 { Label(PerfMonitor.speed(perf.up), systemImage: "arrow.up").font(.system(size: 11).monospacedDigit()).foregroundStyle(ColoriRete.su) }
             }
-            .foregroundStyle(Color.primary.opacity(0.75))
             Spacer(minLength: 0)
             HStack(spacing: 6) {
                 Text(ip ?? T("Non connesso", "Offline")).font(.system(size: cells >= 2 ? 15 : 12, weight: .light).monospacedDigit()).lineLimit(1).minimumScaleFactor(0.7)

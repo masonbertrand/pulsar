@@ -248,6 +248,10 @@ struct IslandBarra: View {
     }
 
     @ViewBuilder private var destra: some View {
+            if model.tab == .casa {          // 29/10: customize Home
+                tasto(model.casaModifica ? "checkmark" : "plus", model.casaModifica ? T("Fatto", "Done") : T("Personalizza la Casa", "Customize Home"),
+                      on: model.casaModifica) { model.casaModifica.toggle() }
+            }
             if model.tab.isTiles {
                 tasto(tiles.editing ? "checkmark" : "plus", tiles.editing ? T("Fatto", "Done") : T("Personalizza", "Customize"), on: tiles.editing) {
                     tiles.editing.toggle()
@@ -408,8 +412,8 @@ struct GlanceSide: View {
                             let giorno = ProssimoEvento.giorno(n.start, ora: ctx.date, inglese: !pulsarItalian)
                             Text(giorno.map { "\($0) · \(ora)" } ?? ora).font(.system(size: 11)).foregroundStyle(Volta.t2).lineLimit(1)
                         } else {
-                            Text(cal.denied ? T("Consenti il Calendario", "Allow Calendar") : T("Niente questa settimana", "Nothing this week"))
-                                .font(.system(size: 12)).foregroundStyle(cal.denied ? Night.amber : Volta.t2)
+                            if cal.denied { PermessoLink(testo: T("Consenti il Calendario", "Allow Calendar"), permesso: .calendario, size: 12) }
+                            else { Text(T("Niente questa settimana", "Nothing this week")).font(.system(size: 12)).foregroundStyle(Volta.t2) }
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -926,7 +930,7 @@ struct CasaGlance: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(T("Prossimo", "Next")).font(.system(size: 11.5)).foregroundStyle(Volta.t3)
                     if cal.denied {
-                        Text(T("Consenti il Calendario", "Allow Calendar")).font(.system(size: 13)).foregroundStyle(Night.amber)
+                        PermessoLink(testo: T("Consenti il Calendario", "Allow Calendar"), permesso: .calendario, size: 13)
                     } else if let n = cal.next {
                         Text(n.title).font(.system(size: 15, weight: .medium)).foregroundStyle(Volta.t1).lineLimit(2)
                         let ora = n.allDay ? T("Tutto il giorno", "All day") : n.start.formatted(date: .omitted, time: .shortened)

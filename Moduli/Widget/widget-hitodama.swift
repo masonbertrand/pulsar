@@ -325,10 +325,9 @@ private struct StatsTile: View {
                         }
                     }
                     HStack(spacing: 8) {
-                        Label(PerfMonitor.speed(perf.down), systemImage: "arrow.down").font(.system(size: 9.5).monospacedDigit())
-                        Label(PerfMonitor.speed(perf.up), systemImage: "arrow.up").font(.system(size: 9.5).monospacedDigit())
+                        Label(PerfMonitor.speed(perf.down), systemImage: "arrow.down").font(.system(size: 9.5).monospacedDigit()).foregroundStyle(ColoriRete.giu)
+                        Label(PerfMonitor.speed(perf.up), systemImage: "arrow.up").font(.system(size: 9.5).monospacedDigit()).foregroundStyle(ColoriRete.su)
                     }
-                    .foregroundStyle(Color.primary.opacity(0.55))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }

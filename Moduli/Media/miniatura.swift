@@ -120,7 +120,7 @@ private struct WindowTile: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if thumb.denied {
-                Text(T("Consenti Registrazione schermo a Pulsar", "Allow Screen Recording for Pulsar")).font(.system(size: 10)).foregroundStyle(Night.amber)
+                PermessoLink(testo: T("Consenti Registrazione schermo", "Allow Screen Recording"), permesso: .registrazioneSchermo, size: 10.5)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let img = thumb.image {
                 Image(decorative: img, scale: 1).resizable().scaledToFit()

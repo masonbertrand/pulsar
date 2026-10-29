@@ -134,6 +134,13 @@ final class IslandModel: ObservableObject {
         if tab == t { tab = .casa }
     }
 
+    /// 29/10: what Home shows, slot by slot: "claude", "musica", "focus" or a tile's id. Up to four.
+    @Published var casaSlot: [String] = (Impostazioni.string(.casaSlot) ?? "claude,musica,focus").split(separator: ",").map(String.init) {
+        didSet { Impostazioni.set(casaSlot.joined(separator: ","), .casaSlot) }
+    }
+    /// Home in edit mode (+ in the bar on Home).
+    @Published var casaModifica = false { didSet { if casaModifica != oldValue { DispatchQueue.main.async { self.dropChanged?() } } } }
+
     /// 28/10: the height every tab's content gets (the tallest of them), set by the island's layout.
     @Published var altezzaContenuto: CGFloat = 196
     /// Does this source take over the panel with its own view? Claude's alerts don't on the Claude tab,
@@ -144,7 +151,7 @@ final class IslandModel: ObservableObject {
     @Published var tab: IslandTab = .casa {
         didSet {
             guard tab != oldValue else { return }
-            tilesMain.editing = false; tilesWork.editing = false          // editing ends when you switch tab
+            tilesMain.editing = false; tilesWork.editing = false; casaModifica = false          // editing ends when you switch tab
             DispatchQueue.main.async { self.dropChanged?() }
         }
     }
@@ -712,9 +719,10 @@ final class IslandModule {
     }
 
     private func clickOutside() {
-        guard pinnedOpen || model.tiles.editing || model.trattiene, let f = win?.frame, !contentFrame(f).contains(NSEvent.mouseLocation) else { return }
+        guard pinnedOpen || model.tiles.editing || model.trattiene || model.casaModifica, let f = win?.frame, !contentFrame(f).contains(NSEvent.mouseLocation) else { return }
         pinnedOpen = false
         model.trattiene = false
+        model.casaModifica = false
         model.tilesMain.editing = false; model.tilesWork.editing = false
         layout(animated: true)
     }
@@ -738,8 +746,8 @@ final class IslandModule {
         win.testo = scrive || model.tab == .claude      // 28/10: the Claude tab has a message box
         if scrive && !win.isKeyWindow { DispatchQueue.main.async { win.makeKey() } }
         if model.dropHover != catcherRaised { placeCatcher() }
-        let state = dropping ? .alert : forced ?? IslandLogic.state(hover: hover, pinnedOpen: pinnedOpen || model.tiles.editing || model.trattiene, alert: alert,
-                                                hasContent: src != nil || hover || pinnedOpen || model.tiles.editing || model.trattiene, peek: peekItem != nil)
+        let state = dropping ? .alert : forced ?? IslandLogic.state(hover: hover, pinnedOpen: pinnedOpen || model.tiles.editing || model.trattiene || model.casaModifica, alert: alert,
+                                                hasContent: src != nil || hover || pinnedOpen || model.tiles.editing || model.trattiene || model.casaModifica, peek: peekItem != nil)
         model.peek = peekItem
         if agentSource?.recentlyDone == true {      // a fine lavoro l'avviso si ritira da solo dopo sei secondi
             DispatchQueue.main.asyncAfter(deadline: .now() + 6.3) { [weak self] in self?.layout(animated: true) }
