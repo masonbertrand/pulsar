@@ -352,3 +352,31 @@ struct DataOra: View {
         }
     }
 }
+
+/// 30/10, the user: the meeting card took over the whole island. Now the meeting sits in the row under the notch,
+/// from 5 minutes before until 10 minutes in, with Join (or Open in Calendar); the rest of the time, the date and time.
+struct RigaSottoNotch: View {
+    @ObservedObject private var cal = CalendarModel.shared
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 20)) { ctx in
+            if RiunioneSource.enabled, let r = cal.prossimaRiunione, Riunione.visibile(inizio: r.start, fine: r.end, ora: ctx.date) {
+                HStack(spacing: 7) {
+                    Circle().fill(Volta.a2).frame(width: 6, height: 6)
+                    Text(T("Riunione", "Meeting") + " · " + Riunione.quantoManca(inizio: r.start, ora: ctx.date, inglese: !pulsarItalian))
+                        .foregroundStyle(Volta.t3)
+                    Text(r.title).fontWeight(.semibold).foregroundStyle(Volta.t1).lineLimit(1)
+                    Button { if let l = r.link { NSWorkspace.shared.open(l) } else { TileOpen.app("Calendar") } } label: {
+                        Text(r.link == nil ? T("Apri", "Open") : T("Entra", "Join")).font(.system(size: 10.5, weight: .semibold))
+                            .foregroundStyle(Volta.primT).padding(.horizontal, 9).frame(height: 16).background(Capsule().fill(Volta.prim))
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .hint(r.link == nil ? T("Apri nel Calendario", "Open in Calendar") : T("Entra nella riunione", "Join the meeting"))
+                }
+                .font(.system(size: 11.5))
+            } else {
+                DataOra()
+            }
+        }
+    }
+}
