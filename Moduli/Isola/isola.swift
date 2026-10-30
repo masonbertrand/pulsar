@@ -145,7 +145,8 @@ final class IslandModel: ObservableObject {
     @Published var altezzaContenuto: CGFloat = 196
     /// Does this source take over the panel with its own view? Claude's alerts don't on the Claude tab,
     /// which shows the same permission and question itself (28/10).
-    func avviso(_ s: IslandSource) -> Bool { !s.usesHome && !(tab == .claude && s.id == "agent") }
+    /// 30/10: the next-meeting card no longer replaces the tabs either: the meeting shows in the row under the notch.
+    func avviso(_ s: IslandSource) -> Bool { !s.usesHome && !(tab == .claude && s.id == "agent") && s.id != "riunione" }
     /// 28/10: true while a message to Claude is being typed: the island stays open even if the mouse wanders off.
     @Published var trattiene = false { didSet { if trattiene != oldValue { DispatchQueue.main.async { self.dropChanged?() } } } }
     @Published var tab: IslandTab = .casa {

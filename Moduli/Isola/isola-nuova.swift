@@ -520,7 +520,7 @@ struct IslandPanelContent: View {
             } else {
                 IslandHead(model: model, status: status)          // nella fascia ai lati del notch
                 let avviso = model.source.map(model.avviso) ?? false
-                if !avviso { DataOra().frame(height: IslandHead.data) }      // 28/10: centred, under the notch
+                if !avviso { RigaSottoNotch().frame(height: IslandHead.data) }      // 28/10: centred, under the notch; 30/10: or the meeting
                 Spacer().frame(height: 8)
                 Group {
                     if avviso, let s = model.source {
